@@ -1,0 +1,21 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Logs / temp
+*.log
+*.tmp
+_dbg*.html
+_t*.html
+
+# 本地生成的大图（仓库里用 docs/ 下的压缩版）
+/preview*.png
+
+# WorkBuddy 本地工程数据
+.workbuddy-ai/

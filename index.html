@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal to Noise — Vinyl Player</title>
+<style>
+/* ============ 基础 ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f6ead9;
+  --cream-2:#e6d3bd;
+  --cream-dim:rgba(246,234,217,.42);
+  --cream-faint:rgba(246,234,217,.14);
+  --red:#d92b39;
+  --ink:#140a0b;
+  --serif:"Bodoni MT","Didot","Times New Roman","Songti SC","Noto Serif SC",serif;
+  --sans:"Helvetica Neue",Helvetica,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+  --mono:"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  color:var(--cream);
+  overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+  -webkit-font-smoothing:antialiased;
+}
+/* 绒布颗粒 + 暗角 */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:2;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity:.32;mix-blend-mode:overlay;
+}
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:3;
+  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, rgba(30,4,8,.55) 100%);
+}
+
+/* ============ 布局 ============ */
+.stage{
+  position:relative;z-index:1;height:100vh;
+  display:grid;grid-template-columns:1.02fr .98fr;
+  grid-template-rows:minmax(0,1fr);
+  padding:clamp(18px,3.2vh,42px) clamp(20px,3.4vw,64px);
+}
+
+/* ============ 左：唱机 ============ */
+.deck{
+  --disc:min(74vh,41vw);
+  position:relative;display:grid;place-items:center;
+  container-type:inline-size;
+}
+.platter{
+  position:relative;width:var(--disc);height:var(--disc);
+  border-radius:50%;
+  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px rgba(38,0,6,.75), 0 0 0 1px rgba(0,0,0,.35);
+  cursor:grab;touch-action:none;
+  -webkit-user-select:none;user-select:none;
+}
+.platter:hover{cursor:grab}
+.is-scratching .platter{cursor:grabbing}
+/* 唱片外圈阴影环 */
+.platter::after{
+  content:"";position:absolute;inset:-1.4%;border-radius:50%;pointer-events:none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.07),
+    inset 0 0 26px rgba(255,255,255,.06),
+    0 0 0 10px rgba(0,0,0,.10);
+  transition:box-shadow .35s var(--ease);
+}
+.platter:hover::after{
+  box-shadow:
+    inset 0 0 0 1px rgba(246,234,217,.26),
+    inset 0 0 26px rgba(255,255,255,.06),
+    0 0 0 10px rgba(0,0,0,.10);
+}
+.is-scratching .platter::after{
+  box-shadow:
+    inset 0 0 0 1px rgba(255,120,110,.55),
+    inset 0 0 34px rgba(255,90,74,.16),
+    0 0 0 10px rgba(0,0,0,.10),
+    0 0 44px rgba(255,80,70,.28);
+}
+
+.disc{
+  position:absolute;inset:0;border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, #1a1a1a 0 30%, #0a0a0a 30.4%, #050505 100%);
+  will-change:transform;
+  transform:rotate(0deg);
+}
+
+/* 纹路 */
+.grooves{
+  position:absolute;inset:0;border-radius:50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.055) 0 .5px, rgba(255,255,255,0) .5px 2.2px),
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.030) 0 1.4px, rgba(0,0,0,0) 1.4px 7px),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.05) 30%, transparent 31%);
+  opacity:.9;
+}
+/* 随唱片转的高光（让旋转可见） */
+.gloss{
+  position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 20deg,
+    rgba(255,255,255,0) 0deg, rgba(255,255,255,.16) 12deg, rgba(255,255,255,0) 30deg,
+    rgba(255,255,255,0) 148deg, rgba(255,255,255,.11) 166deg, rgba(255,255,255,0) 188deg,
+    rgba(255,255,255,0) 298deg, rgba(255,255,255,.08) 318deg, rgba(255,255,255,0) 338deg);
+  mix-blend-mode:screen;
+}
+/* 固定的光斑（光源不动） */
+.platter::before{
+  content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:5;
+  background:
+    radial-gradient(58% 40% at 28% 22%, rgba(255,255,255,.13) 0%, rgba(255,255,255,0) 62%),
+    radial-gradient(40% 30% at 76% 84%, rgba(255,255,255,.05) 0%, rgba(255,255,255,0) 70%);
+  mix-blend-mode:screen;
+}
+
+/* 中心红标 */
+.label{
+  position:absolute;inset:33%;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, #e33c46 0%, #d0262f 44%, #a5151e 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.30), inset 0 2px 8px rgba(255,255,255,.12), 0 0 20px rgba(0,0,0,.6);
+  display:grid;place-items:center;overflow:hidden;
+}
+.label svg{width:100%;height:100%;display:block}
+.ring-text{
+  fill:rgba(250,238,226,.92);
+  font-family:"Helvetica Neue",Arial,sans-serif;
+  font-size:10.5px;letter-spacing:1.8px;font-weight:500;
+}
+.mark{fill:none;stroke:rgba(250,238,226,.95);stroke-width:1.5;stroke-linecap:round}
+.spindle{
+  position:absolute;left:50%;top:50%;width:4.5%;height:4.5%;transform:translate(-50%,-50%);
+  border-radius:50%;background:radial-gradient(circle at 40% 35%, #6d6360, #100c0c 70%);
+  box-shadow:0 0 0 1.5px rgba(250,238,226,.55), 0 1px 3px rgba(0,0,0,.8);
+}
+
+/* ---- 唱臂 ---- */
+.tonearm{position:absolute;inset:0;width:100%;height:100%;overflow:visible;z-index:6;pointer-events:none}
+#armGroup{
+  transform-box:view-box;transform-origin:95px 5px;
+  transform:rotate(-14deg);
+  transition:transform 1.5s cubic-bezier(.34,.02,.16,1);
+}
+.is-playing #armGroup{transform:rotate(0deg)}
+
+/* ---- 机身小零件 ---- */
+.hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
+.hw.bl{left:2%;bottom:1%}
+.hw.br{right:1%;bottom:1%}
+.hw.tl{left:2%;top:2%;flex-direction:column;align-items:flex-start;gap:6px}
+.hw.bc{left:50%;bottom:1.2%;transform:translateX(-50%);justify-content:center;gap:7px}
+
+/* 搓碟提示 / 实时读数 */
+.scratch-idle{
+  font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);white-space:nowrap;
+}
+.scratch-live{
+  display:none;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+  color:#ffe2d4;text-shadow:0 0 14px rgba(255,120,100,.55);
+}
+.scratch-live .dir{font-size:9px;letter-spacing:-.08em;opacity:.9}
+.is-scratching .scratch-idle{display:none}
+.is-scratching .scratch-live{display:flex}
+.scratch-live .dir{animation:pulse .5s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.45}to{opacity:1}}
+
+.tag{
+  font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:rgba(246,234,217,.55);white-space:nowrap;
+}
+.tag b{display:block;font-weight:500;color:rgba(246,234,217,.9);letter-spacing:.2em}
+
+/* 电平条 */
+.eq{display:flex;align-items:flex-end;gap:2.5px;height:22px}
+.eq i{
+  display:block;width:2.5px;border-radius:1px;background:rgba(246,234,217,.78);
+  height:22%;animation:eq .9s ease-in-out infinite alternate;animation-play-state:paused;
+}
+.is-playing .eq i{animation-play-state:running}
+@keyframes eq{from{height:14%}to{height:100%}}
+.eq i:nth-child(1){animation-duration:.72s}
+.eq i:nth-child(2){animation-duration:.51s;animation-delay:-.2s}
+.eq i:nth-child(3){animation-duration:.88s;animation-delay:-.4s}
+.eq i:nth-child(4){animation-duration:.63s;animation-delay:-.1s}
+.eq i:nth-child(5){animation-duration:.97s;animation-delay:-.5s}
+.eq i:nth-child(6){animation-duration:.55s;animation-delay:-.3s}
+.eq i:nth-child(7){animation-duration:.79s;animation-delay:-.6s}
+.eq i:nth-child(8){animation-duration:.68s;animation-delay:-.15s}
+
+/* 旋钮 */
+.knob{
+  width:clamp(26px,3.4vh,38px);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, #fbf3e7 0%, #e3d3bd 46%, #b8a68f 78%, #8d7c69 100%);
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18);
+  position:relative;
+}
+.knob::after{
+  content:"";position:absolute;left:50%;top:14%;width:2px;height:26%;
+  background:rgba(60,40,36,.6);border-radius:1px;transform-origin:50% 140%;
+  transform:translateX(-50%) rotate(var(--r,-40deg));
+}
+.led{
+  width:7px;height:7px;border-radius:50%;background:#4a1418;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.5);
+  transition:background .5s, box-shadow .5s;
+}
+.is-playing .led{background:#ff5a4a;box-shadow:0 0 9px 2px rgba(255,90,74,.75), inset 0 0 0 1px rgba(0,0,0,.3)}
+
+/* ============ 右：歌词面板 ============ */
+.panel{
+  display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+  padding-left:clamp(20px,3vw,56px);
+  border-left:1px solid rgba(246,234,217,.13);
+  position:relative;
+}
+.eyebrow{
+  display:flex;align-items:center;gap:10px;
+  font-size:9.5px;letter-spacing:.32em;text-transform:uppercase;
+  color:rgba(246,234,217,.6);
+}
+.eyebrow span{display:inline-block;width:26px;height:1px;background:rgba(246,234,217,.35)}
+.title{
+  font-family:var(--serif);font-weight:400;
+  font-size:clamp(28px,4.4vw,54px);line-height:1.02;
+  letter-spacing:.005em;margin-top:14px;
+}
+.artist{
+  margin-top:10px;font-size:clamp(11px,1.05vw,13px);
+  letter-spacing:.08em;color:rgba(246,234,217,.66);
+}
+.artist em{font-style:normal;color:rgba(246,234,217,.36)}
+.credit{
+  margin-top:9px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(246,234,217,.38);
+}
+.credit a{
+  color:rgba(246,234,217,.5);text-decoration:none;
+  border-bottom:1px solid rgba(246,234,217,.2);padding-bottom:1px;
+  transition:color .25s,border-color .25s;
+}
+.credit a:hover{color:var(--cream);border-color:rgba(246,234,217,.5)}
+
+/* 歌词区 */
+.lyrics{
+  position:relative;flex:1;margin:clamp(14px,3vh,34px) 0 0 -16px;min-height:0;overflow:hidden;
+  padding-left:16px;
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 16%, #000 80%, transparent 100%);
+  mask-image:linear-gradient(to bottom, transparent 0%, #000 16%, #000 80%, transparent 100%);
+}
+.lyric-track{
+  position:relative;
+  transition:transform .62s cubic-bezier(.25,.8,.28,1);
+  will-change:transform;
+  padding:0 4px;
+}
+/* 搓碟时歌词跟得更紧，不要拖沓 */
+.is-scratching .lyric-track{transition-duration:.16s;transition-timing-function:ease-out}
+.lyric{
+  padding:clamp(7px,1.15vh,13px) 0;cursor:pointer;
+  opacity:var(--o,.14);
+  transition:opacity .5s var(--ease), transform .5s var(--ease);
+}
+.lyric:hover{opacity:.72}
+.lyric .en{
+  font-family:var(--serif);
+  font-size:clamp(15px,1.62vw,25px);line-height:1.32;
+  letter-spacing:.005em;color:var(--cream);
+  transition:color .4s;
+}
+.lyric .cn{
+  margin-top:4px;font-size:clamp(10px,.86vw,12.5px);line-height:1.5;
+  letter-spacing:.03em;color:rgba(246,234,217,.5);
+}
+.lyric.is-active{opacity:1;transform:translateX(2px)}
+.lyric.is-active .en{color:#fffaf2;text-shadow:0 0 26px rgba(255,190,160,.28)}
+.lyric.is-active .cn{color:rgba(246,234,217,.78)}
+.lyric.is-active::before{
+  content:"";position:absolute;left:-16px;margin-top:.62em;
+  width:5px;height:5px;border-radius:50%;background:var(--red);
+  box-shadow:0 0 10px 1px rgba(217,43,57,.9);
+}
+.lyric{position:relative}
+
+/* ---- 可视化面板（无歌词时） ---- */
+.visual{
+  display:none;flex:1;min-height:0;
+  flex-direction:column;gap:12px;
+  margin:clamp(14px,3vh,34px) 0 0;
+}
+body.view-visual .lyrics{display:none}
+body.view-visual .visual{display:flex}
+
+.viz-head{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);
+}
+.viz-live{display:flex;align-items:center;gap:7px;color:rgba(246,234,217,.5)}
+.viz-live i{
+  width:5px;height:5px;border-radius:50%;background:rgba(246,234,217,.28);
+  transition:background .4s, box-shadow .4s;
+}
+.is-playing .viz-live i{background:var(--red);box-shadow:0 0 9px rgba(217,43,57,.9)}
+
+.viz-wrap{position:relative;flex:1;min-height:0}
+#viz{display:block;width:100%;height:100%}
+
+.viz-foot{
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;
+  color:rgba(246,234,217,.28);
+}
+
+/* 视图切换旋钮 */
+.knob-toggle{
+  border:0;padding:0;cursor:pointer;font:inherit;pointer-events:auto;
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18), 0 0 0 1px rgba(246,234,217,.26);
+  transition:box-shadow .3s var(--ease), transform .3s var(--ease);
+}
+.knob-toggle::after{transition:transform .45s var(--ease)}
+.knob-toggle:hover{
+  transform:scale(1.08);
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18), 0 0 0 3px rgba(246,234,217,.24);
+}
+.knob-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(246,234,217,.55)}
+.knob-toggle::before{
+  content:"Lyrics / Visual";position:absolute;left:50%;bottom:148%;
+  transform:translateX(-50%);
+  font-family:var(--sans);font-size:8px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(246,234,217,.72);white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .25s;
+}
+.knob-toggle:hover::before{opacity:1}
+.knob-toggle[aria-pressed="true"]{
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18),
+             0 0 0 1.5px rgba(255,150,130,.8), 0 0 16px rgba(255,110,90,.35);
+}
+
+/* 控制区 */
+.controls{margin-top:clamp(10px,2vh,22px);padding-top:clamp(12px,2vh,20px);
+  border-top:1px solid rgba(246,234,217,.13)}
+.seek{display:flex;align-items:center;gap:12px}
+.time{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:rgba(246,234,217,.55);min-width:34px}
+.time:last-of-type{text-align:right}
+.bar{
+  position:relative;flex:1;height:16px;display:flex;align-items:center;cursor:pointer;
+  touch-action:none;
+}
+.bar .rail{
+  position:relative;width:100%;height:2px;border-radius:2px;background:rgba(246,234,217,.18);
+  transition:height .25s var(--ease);
+}
+.bar:hover .rail{height:3px}
+.bar .fill{
+  position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:2px;
+  background:linear-gradient(90deg, rgba(246,234,217,.75), var(--cream));
+}
+.bar .dot{
+  position:absolute;top:50%;left:0%;width:8px;height:8px;border-radius:50%;
+  background:var(--cream);transform:translate(-50%,-50%);
+  box-shadow:0 0 0 3px rgba(246,234,217,.16), 0 0 12px rgba(255,220,190,.5);
+  transition:transform .2s var(--ease);
+}
+.bar:hover .dot{transform:translate(-50%,-50%) scale(1.28)}
+
+.row{display:flex;align-items:center;justify-content:space-between;margin-top:clamp(10px,2vh,20px);gap:16px}
+.btns{display:flex;align-items:center;gap:clamp(12px,1.6vw,20px)}
+.btn{
+  background:none;border:0;padding:0;cursor:pointer;color:var(--cream);
+  display:grid;place-items:center;opacity:.72;transition:opacity .25s, transform .25s var(--ease);
+}
+.btn:hover{opacity:1;transform:scale(1.06)}
+.btn svg{display:block}
+.play{
+  width:clamp(42px,5.2vh,54px);aspect-ratio:1;border-radius:50%;
+  background:var(--cream);color:#8b1e26;opacity:1;
+  box-shadow:0 8px 22px -6px rgba(0,0,0,.6), inset 0 -2px 6px rgba(120,70,60,.25);
+}
+.play:hover{transform:scale(1.05)}
+.play:active{transform:scale(.96)}
+/* 自动播放被浏览器拦截时，提示用户点一下 */
+@keyframes tapPulse{
+  0%{box-shadow:0 8px 22px -6px rgba(0,0,0,.6), 0 0 0 0 rgba(246,234,217,.5)}
+  70%{box-shadow:0 8px 22px -6px rgba(0,0,0,.6), 0 0 0 15px rgba(246,234,217,0)}
+  100%{box-shadow:0 8px 22px -6px rgba(0,0,0,.6), 0 0 0 0 rgba(246,234,217,0)}
+}
+.needs-tap .play{animation:tapPulse 2s ease-out infinite}
+.play .i-pause{display:none}
+.is-playing .play .i-play{display:none}
+.is-playing .play .i-pause{display:block}
+
+.meta{display:flex;align-items:center;gap:14px}
+.rpm{
+  font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:rgba(246,234,217,.42);
+  white-space:nowrap;
+}
+.vol{display:flex;align-items:center;gap:8px;opacity:.6}
+.vol input{
+  -webkit-appearance:none;appearance:none;width:clamp(46px,5vw,72px);height:2px;
+  background:rgba(246,234,217,.3);border-radius:2px;outline:none;cursor:pointer;
+}
+.vol input::-webkit-slider-thumb{
+  -webkit-appearance:none;width:8px;height:8px;border-radius:50%;background:var(--cream);
+  box-shadow:0 0 6px rgba(255,220,190,.5);
+}
+
+/* ============ 响应式 ============ */
+@media (max-width:1000px), (orientation:portrait){
+  body{overflow:auto}
+  .stage{grid-template-columns:1fr;grid-template-rows:auto;height:auto;min-height:100vh;gap:26px;padding:24px 22px 34px}
+  .deck{--disc:min(70vw,48vh);padding-top:34px}
+  .panel{border-left:0;padding-left:0;border-top:1px solid rgba(246,234,217,.13);padding-top:22px;overflow:visible}
+  .lyrics{height:36vh;flex:none}
+  .hw.tl{display:none}
+}
+</style>
+</head>
+<body>
+<audio id="audio" src="assets/signal-to-noise-160.mp3" preload="auto"></audio>
+<div class="stage">
+
+  <!-- ================= 左：黑胶唱机 ================= -->
+  <div class="deck" id="deck">
+
+    <div class="platter">
+      <div class="disc" id="disc">
+        <div class="grooves"></div>
+        <div class="gloss"></div>
+
+        <div class="label">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <defs>
+              <path id="ringPath" d="M100,100 m-57,0 a57,57 0 1,1 114,0 a57,57 0 1,1 -114,0"/>
+            </defs>
+            <text class="ring-text">
+              <textPath href="#ringPath" startOffset="0">SIGNAL · NOISE · SIGNAL · NOISE · SIGNAL · NOISE ·</textPath>
+            </text>
+            <g class="mark">
+              <circle cx="88" cy="100" r="12.5"/>
+              <circle cx="112" cy="100" r="12.5"/>
+              <path d="M100 81.5v37"/>
+            </g>
+          </svg>
+          <div class="spindle"></div>
+        </div>
+      </div>
+
+      <!-- 唱臂 -->
+      <svg class="tonearm" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#4b4540"/>
+            <stop offset=".18" stop-color="#d8d0c4"/>
+            <stop offset=".38" stop-color="#8e8780"/>
+            <stop offset=".58" stop-color="#f6f0e6"/>
+            <stop offset=".82" stop-color="#8a837b"/>
+            <stop offset="1" stop-color="#3f3a36"/>
+          </linearGradient>
+          <linearGradient id="metal2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f2ebdf"/>
+            <stop offset=".35" stop-color="#9a938a"/>
+            <stop offset=".62" stop-color="#e8e0d4"/>
+            <stop offset="1" stop-color="#5a534d"/>
+          </linearGradient>
+          <radialGradient id="baseG" cx=".34" cy=".28" r=".85">
+            <stop offset="0" stop-color="#5f5550"/>
+            <stop offset=".5" stop-color="#241e1d"/>
+            <stop offset="1" stop-color="#0b0909"/>
+          </radialGradient>
+          <radialGradient id="pivotG" cx=".36" cy=".3" r=".8">
+            <stop offset="0" stop-color="#e9e1d4"/>
+            <stop offset=".45" stop-color="#8d857c"/>
+            <stop offset="1" stop-color="#3c3733"/>
+          </radialGradient>
+          <linearGradient id="cwG" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#3b3633"/>
+            <stop offset=".3" stop-color="#b3a99c"/>
+            <stop offset=".55" stop-color="#e2d9cb"/>
+            <stop offset=".8" stop-color="#8c8378"/>
+            <stop offset="1" stop-color="#312c29"/>
+          </linearGradient>
+          <filter id="armShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="1.6" dy="2.6" stdDeviation="1.6" flood-color="#000" flood-opacity=".6"/>
+          </filter>
+        </defs>
+
+        <!-- 臂座（固定） -->
+        <g filter="url(#armShadow)">
+          <circle cx="95" cy="5" r="5.6" fill="url(#baseG)"/>
+          <circle cx="95" cy="5" r="5.6" fill="none" stroke="rgba(240,228,212,.30)" stroke-width=".35"/>
+          <circle cx="95" cy="5" r="4.1" fill="none" stroke="rgba(240,228,212,.17)" stroke-width=".4"/>
+          <circle cx="95" cy="5" r="1.9" fill="url(#pivotG)"/>
+          <circle cx="95" cy="5" r=".75" fill="#141010"/>
+        </g>
+
+        <!-- 可旋转部分 -->
+        <g id="armGroup" filter="url(#armShadow)">
+          <!-- 配重 -->
+          <g transform="translate(98.4,-6.2) rotate(17)">
+            <rect x="-2.3" y="-3.9" width="4.6" height="7.8" rx="1.8" fill="url(#cwG)"/>
+            <rect x="-2.3" y="-.9" width="4.6" height=".45" fill="rgba(0,0,0,.55)"/>
+            <rect x="-2.3" y="1.5" width="4.6" height=".45" fill="rgba(0,0,0,.45)"/>
+          </g>
+          <!-- 臂管：贯穿支点 -->
+          <line x1="98.6" y1="-6.6" x2="73.8" y2="75" stroke="url(#metal)" stroke-width="1.05" stroke-linecap="round"/>
+          <!-- 唱头壳（沿臂方向） -->
+          <g transform="rotate(16.7 73.4 77)">
+            <path d="M71.3 74.6 L75.5 74.6 L76.2 83.4 L70.6 83.4 Z" fill="url(#metal2)" opacity=".97"/>
+            <path d="M70.9 75.6 L75.9 75.6" stroke="rgba(0,0,0,.28)" stroke-width=".35"/>
+            <rect x="70.9" y="81.4" width="5" height="4.4" rx=".7" fill="#241e1c"/>
+            <rect x="72.3" y="82.2" width="2.2" height="1.1" rx=".35" fill="rgba(255,255,255,.16)"/>
+            <circle cx="73.4" cy="86.6" r=".6" fill="#f0e7d9"/>
+          </g>
+      </svg>
+    </div>
+
+    <!-- 机身细节 -->
+    <div class="hw tl">
+      <div class="tag"><b>CRIMSON</b>RECORD PLAYER · 33⅓</div>
+    </div>
+
+    <div class="hw bl">
+      <div class="eq">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="tag">AUDIO<br>LEVEL</div>
+    </div>
+
+    <div class="hw br">
+      <button class="knob knob-toggle" id="viewToggle" style="--r:-52deg"
+              title="切换 歌词 / 可视化" aria-label="切换歌词与可视化" aria-pressed="false"></button>
+      <div class="knob" id="volKnob" style="--r:38deg"></div>
+      <div class="led"></div>
+    </div>
+
+    <div class="hw bc">
+      <div class="scratch-idle">Drag to scratch</div>
+      <div class="scratch-live">
+        <span class="dir" id="scratchDir">◀◀</span>
+        <span id="scratchTime">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 右：歌词 ================= -->
+  <div class="panel">
+    <div class="eyebrow"><span></span>SIDE A · TRACK 01</div>
+    <h1 class="title">Signal to Noise</h1>
+    <div class="artist">Scott Buckley <em>— Cinematic Ambient, 2020</em></div>
+    <div class="credit">Music · Scott Buckley · <a href="https://www.scottbuckley.com.au/library/signal-to-noise/" target="_blank" rel="noopener">CC BY 4.0</a></div>
+
+    <div class="lyrics" id="lyrics">
+      <div class="lyric-track" id="lyricTrack"></div>
+    </div>
+
+    <!-- 无歌词时显示：实时频谱 -->
+    <div class="visual" id="visual">
+      <div class="viz-head">
+        <span>Spectrum analyser</span>
+        <span class="viz-live"><i></i>Live</span>
+      </div>
+      <div class="viz-wrap"><canvas id="viz"></canvas></div>
+      <div class="viz-foot">
+        <span>40</span><span>120</span><span>500</span><span>2k</span><span>8k</span><span>16k</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="seek">
+        <div class="time" id="tCur">0:00</div>
+        <div class="bar" id="bar">
+          <div class="rail">
+            <div class="fill" id="fill"></div>
+          </div>
+          <div class="dot" id="dot"></div>
+        </div>
+        <div class="time" id="tDur">5:53</div>
+      </div>
+
+      <div class="row">
+        <div class="btns">
+          <button class="btn" id="prev" aria-label="上一句">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zm3.2 7L19 5.5v13z"/></svg>
+          </button>
+          <button class="btn play" id="play" aria-label="播放">
+            <svg class="i-play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+            <svg class="i-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>
+          </button>
+          <button class="btn" id="next" aria-label="下一句">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM5 5.5L14.8 12 5 18.5z"/></svg>
+          </button>
+        </div>
+        <div class="meta">
+          <div class="rpm">33⅓ RPM · STEREO</div>
+          <div class="vol">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity=".8"><path d="M4 9v6h3.6L13 19V5L7.6 9H4zm11.5-1.4v8.8a5 5 0 000-8.8z"/></svg>
+            <input type="range" min="0" max="100" value="72" id="vol">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 曲目 & 文字 =================
+   Signal to Noise — Scott Buckley（CC BY 4.0）
+   https://www.scottbuckley.com.au/library/signal-to-noise/
+   器乐曲，故右侧为随音乐滚动的唱片内页文字（原创），时间轴按乐曲段落排布：
+   0–56 前奏 / 56–144 主段 / 144–200 静段 / 200–320 高潮 / 320+ 淡出
+*/
+const LYRICS = [
+  { t:8,   en:"Static is a kind of weather",          cn:"静电也是一种天气" },
+  { t:22,  en:"the needle finds its own way home",    cn:"唱针自己找得到回家的路" },
+  { t:36,  en:"I have been dialing the dark",         cn:"我一直在拨弄黑暗" },
+  { t:50,  en:"for a signal that is only noise",      cn:"等一个其实只是噪音的信号" },
+  { t:64,  en:"Then the room begins to lift",         cn:"然后房间开始上升" },
+  { t:78,  en:"every lamp a small sun",               cn:"每盏灯都是一颗小太阳" },
+  { t:92,  en:"we are the static, we are the song",   cn:"我们就是静电，我们就是歌" },
+  { t:106, en:"the wire remembers what we lost",      cn:"电线记得我们丢掉的东西" },
+  { t:120, en:"hold the frequency, hold it long",     cn:"守住这个频率，守久一点" },
+  { t:136, en:"let it hum until it hurts",            cn:"让它嗡鸣到发疼" },
+  { t:152, en:"Everything goes quiet in the middle",  cn:"中间那一段，一切都安静下来" },
+  { t:166, en:"the way a heart does between beats",   cn:"像两次心跳之间的空隙" },
+  { t:180, en:"I can hear the room breathe",          cn:"我听得见房间在呼吸" },
+  { t:194, en:"and the tape begin to turn",           cn:"和磁带开始转动" },
+  { t:210, en:"Now the whole sky is signal",          cn:"现在整片天空都是信号" },
+  { t:226, en:"and every window's burning gold",      cn:"每一扇窗都烧成金色" },
+  { t:242, en:"Louder, louder, let it climb",         cn:"再响一点，让它往上爬" },
+  { t:258, en:"till the static turns to light",       cn:"直到静电变成光" },
+  { t:276, en:"till the noise becomes a choir",       cn:"直到噪音变成一个合唱" },
+  { t:296, en:"and the dark learns how to sing",      cn:"黑暗学会了唱歌" },
+  { t:322, en:"… the needle lifts …",                 cn:"唱针抬起" },
+  { t:338, en:"and the room keeps humming",           cn:"房间还在嗡鸣" }
+];
+let DURATION = 353;   // 默认 5:53，加载音频元数据后以真实时长为准
+
+/* ================= DOM ================= */
+const body      = document.body;
+const disc      = document.getElementById('disc');
+const audio     = document.getElementById('audio');
+const track     = document.getElementById('lyricTrack');
+const viewport  = document.getElementById('lyrics');
+const bar       = document.getElementById('bar');
+const fill      = document.getElementById('fill');
+const dot       = document.getElementById('dot');
+const tCur      = document.getElementById('tCur');
+const tDur      = document.getElementById('tDur');
+const playBtn   = document.getElementById('play');
+
+let lines = [];
+LYRICS.forEach((l, i) => {
+  const el = document.createElement('div');
+  el.className = 'lyric';
+  el.innerHTML = `<div class="en">${l.en}</div><div class="cn">${l.cn}</div>`;
+  el.addEventListener('click', () => seekTo(l.t + 0.01));
+  track.appendChild(el);
+  lines.push(el);
+});
+
+/* ================= 状态 ================= */
+const state = { t: 0, playing: false, active: -1 };
+tDur.textContent = fmt(DURATION);
+
+function fmt(s){
+  s = Math.max(0, Math.floor(s));
+  return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
+
+/* ================= 音频 ⇄ 界面 ================= */
+function seekTo(t){
+  state.t = Math.min(DURATION, Math.max(0, t));
+  if (audio.readyState >= 1) audio.currentTime = state.t;
+  paint();
+}
+
+function setPlaying(on){
+  state.playing = on;
+  body.classList.toggle('is-playing', on);
+  playBtn.setAttribute('aria-label', on ? '暂停' : '播放');
+
+  if (on){
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => {          // 被浏览器自动播放策略拦截
+      state.playing = false;
+      body.classList.remove('is-playing');
+      playBtn.setAttribute('aria-label', '播放');
+      body.classList.add('needs-tap');
+    });
+  } else {
+    audio.pause();
+  }
+}
+
+audio.addEventListener('loadedmetadata', () => {
+  if (isFinite(audio.duration) && audio.duration > 1){
+    DURATION = audio.duration;
+    tDur.textContent = fmt(DURATION);
+    paint();
+  }
+});
+
+audio.addEventListener('play', () => body.classList.remove('needs-tap'));
+
+audio.addEventListener('ended', () => {
+  setPlaying(false);
+  seekTo(0);
+  state.active = -1;
+  paint();
+});
+
+/* 中心对齐当前行 */
+function centerLine(i){
+  const el = lines[i];
+  if (!el) return;
+  const y = el.offsetTop + el.offsetHeight/2 - viewport.clientHeight/2;
+  track.style.transform = `translate3d(0, ${-y}px, 0)`;
+}
+
+function currentIndex(t){
+  let idx = 0;
+  for (let i = 0; i < LYRICS.length; i++) if (t >= LYRICS[i].t) idx = i;
+  return idx;
+}
+
+function paint(){
+  const p = Math.min(1, state.t / DURATION);
+  fill.style.width = (p*100) + '%';
+  dot.style.left  = (p*100) + '%';
+  tCur.textContent = fmt(state.t);
+
+  const i = currentIndex(state.t);
+  if (i !== state.active){
+    state.active = i;
+    lines.forEach((el, k) => {
+      const d = Math.abs(k - i);
+      el.style.setProperty('--o', d === 0 ? 1 : d === 1 ? .40 : d === 2 ? .22 : .11);
+      el.classList.toggle('is-active', k === i);
+    });
+    centerLine(i);
+  }
+}
+
+/* ================= 唱片角度 & 播放循环 ================= */
+const SPIN_PERIOD = 22;   // 视觉转速：22 秒一圈
+const SEC_PER_TURN = 6;   // 搓碟换算：手转一圈 = 音轨前进/后退 6 秒
+
+let discAngle = 0;        // 唱片当前角度（由 JS 统一驱动，便于拖拽接管）
+let spinBoost = 0;        // 松手后的惯性角速度 deg/s
+let scratching = false;   // 是否正在搓碟
+let wasPlaying = false;
+let ptrAngleLast = 0, ptrTimeLast = 0, ptrVel = 0, ptrId = null, ptrMoved = 0;
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (!scratching){
+    if (state.playing){
+      state.t = audio.currentTime;              // 进度以音频为准
+      discAngle += 360 / SPIN_PERIOD * dt;
+    }
+    if (spinBoost){                       // 惯性：松手后继续转一会儿
+      discAngle += spinBoost * dt;
+      spinBoost *= Math.pow(0.012, dt);
+      if (Math.abs(spinBoost) < 2) spinBoost = 0;
+    }
+  }
+
+  disc.style.transform = 'rotate(' + discAngle + 'deg)';
+  paint();
+  if (viewMode === 'visual') drawViz();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ================= 搓碟：按住唱片拖拽 ================= */
+const platterEl    = document.querySelector('.platter');
+const scratchTimeEl = document.getElementById('scratchTime');
+const scratchDirEl  = document.getElementById('scratchDir');
+
+function pointerAngle(e){
+  const r = platterEl.getBoundingClientRect();
+  return Math.atan2(
+    e.clientY - (r.top + r.height / 2),
+    e.clientX - (r.left + r.width / 2)
+  ) * 180 / Math.PI;
+}
+
+function paintScratch(dir){
+  scratchTimeEl.textContent = fmt(state.t);
+  scratchDirEl.textContent  = dir < -0.6 ? '◀◀' : dir > 0.6 ? '▶▶' : '●';
+}
+
+platterEl.addEventListener('pointerdown', e => {
+  if (e.button) return;
+  e.preventDefault();
+  ensureAnalyser();                           // 首次手势里建 AudioContext，避免被挂起
+
+  scratching = true;
+  wasPlaying = state.playing;
+  ptrId      = e.pointerId;
+  ptrMoved   = 0;
+  ptrVel     = 0;
+  spinBoost  = 0;
+  ptrAngleLast = pointerAngle(e);
+  ptrTimeLast  = performance.now();
+
+  body.classList.add('is-scratching');
+  // 保持音源运行，靠高频 seek 制造刮擦声；暂停态下（唱臂抬起）不出声
+  if (state.playing) { const p = audio.play(); if (p && p.catch) p.catch(()=>{}); }
+  try { platterEl.setPointerCapture(ptrId); } catch (_) {}
+  paintScratch(0);
+});
+
+platterEl.addEventListener('pointermove', e => {
+  if (!scratching || e.pointerId !== ptrId) return;
+
+  const a = pointerAngle(e);
+  let d = a - ptrAngleLast;
+  if (d > 180)  d -= 360;          // 跨越 ±180° 时归一化，避免跳变
+  if (d < -180) d += 360;
+  ptrAngleLast = a;
+  if (!d) return;
+
+  const now = performance.now();
+  const dtm = Math.max(0.008, (now - ptrTimeLast) / 1000);
+  ptrTimeLast = now;
+  ptrVel = ptrVel * 0.6 + (d / dtm) * 0.4;   // 平滑角速度，用于松手惯性
+
+  ptrMoved  += Math.abs(d);
+  discAngle += d;                             // 唱片跟手转
+  state.t    = Math.min(DURATION, Math.max(0, state.t + d / 360 * SEC_PER_TURN));
+  if (audio.readyState >= 1) audio.currentTime = state.t;   // 声音跟着刮
+
+  paint();                                    // 歌词、进度条实时同步
+  paintScratch(d);
+});
+
+function endScratch(){
+  if (!scratching) return;
+  scratching = false;
+  body.classList.remove('is-scratching');
+  try { platterEl.releasePointerCapture(ptrId); } catch (_) {}
+
+  if (audio.readyState >= 1) audio.currentTime = state.t;   // 归位，消除拖动期间的时间漂移
+
+  if (ptrMoved < 2){                          // 几乎没动 → 当作点击播放/暂停
+    spinBoost = 0;
+    setPlaying(!wasPlaying);
+  } else {
+    spinBoost = Math.max(-1500, Math.min(1500, ptrVel * 0.55));
+    setPlaying(wasPlaying);
+  }
+}
+platterEl.addEventListener('pointerup', endScratch);
+platterEl.addEventListener('pointercancel', endScratch);
+
+/* ================= 双视图：歌词 ⇄ 实时频谱 ================= */
+const HAS_LYRICS = LYRICS.length > 0;
+let viewMode = HAS_LYRICS ? 'lyrics' : 'visual';
+
+const viewToggle = document.getElementById('viewToggle');
+const vizCanvas  = document.getElementById('viz');
+const vizWrap    = vizCanvas.parentElement;
+const vizG       = vizCanvas.getContext('2d');
+
+let audioCtx = null, analyser = null, freqData = null, barBins = null;
+let vizBroken = false, silentFrames = 0, dataOK = true;
+
+const BARS = 56;
+const barVals = new Float32Array(BARS);
+let vizW = 0, vizH = 0, vizDPR = 1;
+
+function applyView(){
+  const on = viewMode === 'visual';
+  body.classList.toggle('view-visual', on);
+  viewToggle.style.setProperty('--r', on ? '38deg' : '-52deg');
+  viewToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (on) requestAnimationFrame(sizeViz);
+}
+
+/* 只能在用户手势里创建 AudioContext，否则会被挂起导致静音 */
+function ensureAnalyser(){
+  if (analyser || vizBroken) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC){ vizBroken = true; return; }
+  try{
+    audioCtx = new AC();
+    const src = audioCtx.createMediaElementSource(audio);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.72;
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    buildBins();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  }catch (e){
+    vizBroken = true; analyser = null;
+  }
+}
+
+/* 对数频率分段，低频不被挤成一根 */
+function buildBins(){
+  const nyq = audioCtx.sampleRate / 2;
+  const n   = analyser.frequencyBinCount;
+  const fMin = 38, fMax = Math.min(16500, nyq * 0.92);
+  barBins = [];
+  for (let i = 0; i < BARS; i++){
+    const f0 = fMin * Math.pow(fMax / fMin, i / BARS);
+    const f1 = fMin * Math.pow(fMax / fMin, (i + 1) / BARS);
+    let s = Math.floor(f0 / nyq * n);
+    let e = Math.ceil(f1 / nyq * n);
+    if (e <= s) e = s + 1;
+    barBins.push([Math.min(s, n - 1), Math.min(e, n)]);
+  }
+}
+
+function sizeViz(){
+  const r = vizWrap.getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  vizDPR = Math.min(2, window.devicePixelRatio || 1);
+  vizW = r.width; vizH = r.height;
+  vizCanvas.width  = Math.round(vizW * vizDPR);
+  vizCanvas.height = Math.round(vizH * vizDPR);
+  vizG.setTransform(vizDPR, 0, 0, vizDPR, 0, 0);
+}
+
+function drawViz(){
+  if (!vizW || !vizH){ sizeViz(); if (!vizW) return; }
+
+  const g = vizG;
+  const baseY  = vizH * 0.80;
+  const topPad = 8;
+  g.clearRect(0, 0, vizW, vizH);
+
+  // 网格
+  g.save();
+  g.strokeStyle = 'rgba(246,234,217,.055)';
+  g.lineWidth = 1;
+  for (let k = 1; k <= 3; k++){
+    const y = Math.round(baseY - (baseY - topPad) * k / 3) + 0.5;
+    g.beginPath(); g.moveTo(0, y); g.lineTo(vizW, y); g.stroke();
+  }
+  g.restore();
+
+  // 基线
+  g.strokeStyle = 'rgba(246,234,217,.26)';
+  g.beginPath(); g.moveTo(0, baseY + 0.5); g.lineTo(vizW, baseY + 0.5); g.stroke();
+
+  // 取频谱；长时间取不到就退化为程序化波形（取到即恢复）
+  if (analyser && !vizBroken && state.playing){
+    analyser.getByteFrequencyData(freqData);
+    let peak = 0;
+    for (let b = 0; b < freqData.length; b++) if (freqData[b] > peak) peak = freqData[b];
+    if (peak > 0){ silentFrames = 0; dataOK = true; }
+    else if (++silentFrames > 120){ dataOK = false; }
+  }
+  const live = state.playing && analyser && dataOK && !vizBroken;
+
+  const gap = Math.max(2, vizW / BARS * 0.34);
+  const bw  = (vizW - gap * (BARS - 1)) / BARS;
+  const now = performance.now() / 1000;
+
+  for (let i = 0; i < BARS; i++){
+    let target = 0;
+    if (live){
+      const [s, e] = barBins[i];
+      let m = 0;
+      for (let b = s; b < e; b++) if (freqData[b] > m) m = freqData[b];
+      target = Math.min(1, Math.pow(m / 255, 0.82) * (1 + 1.15 * (i / BARS)));
+    } else if (state.playing){
+      // 频谱不可用（例如 file:// 被跨源隔离）时的程序化兜底
+      const a  = Math.abs(Math.sin(now * 1.7 + i * 0.71));
+      const b2 = Math.abs(Math.sin(now * 0.93 + i * 0.23));
+      const c  = Math.abs(Math.sin(now * 3.1 + i * 1.31));
+      const tilt = 1 - 0.42 * Math.pow(i / BARS, 0.75);   // 高频自然衰减
+      target = Math.min(1, (0.1 + (a * 0.52 + b2 * 0.3 + c * 0.18) * 1.3) * tilt);
+    }
+
+    barVals[i] += (target - barVals[i]) * (target > barVals[i] ? 0.5 : 0.13);
+    if (barVals[i] < 0.002) barVals[i] = 0;
+
+    const x = i * (bw + gap);
+    const h = Math.max(1.5, barVals[i] * (baseY - topPad));
+
+    // 主体：越高越亮，短柱压暗，避免整排发灰
+    g.fillStyle = 'rgba(250,240,226,' + (0.34 + 0.6 * barVals[i]).toFixed(3) + ')';
+    g.beginPath();
+    if (g.roundRect) g.roundRect(x, baseY - h, bw, h, Math.min(bw / 2, 3));
+    else g.rect(x, baseY - h, bw, h);
+    g.fill();
+
+    // 倒影
+    g.globalAlpha = 0.12;
+    g.fillRect(x, baseY + 2, bw, Math.min(h * 0.22, vizH - baseY - 6));
+    g.globalAlpha = 1;
+  }
+}
+
+viewToggle.addEventListener('click', () => {
+  if (!HAS_LYRICS) return;
+  ensureAnalyser();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  viewMode = viewMode === 'lyrics' ? 'visual' : 'lyrics';
+  applyView();
+});
+
+if (!HAS_LYRICS){
+  viewToggle.disabled = true;
+  viewToggle.title = '本曲无歌词，已显示可视化';
+  viewToggle.style.cursor = 'default';
+}
+applyView();
+
+if (window.ResizeObserver) new ResizeObserver(sizeViz).observe(vizWrap);
+window.addEventListener('resize', sizeViz);
+
+/* ================= 交互 ================= */
+playBtn.addEventListener('click', () => { ensureAnalyser(); setPlaying(!state.playing); });
+
+document.getElementById('prev').addEventListener('click', () => {
+  const i = Math.max(0, currentIndex(state.t) - 1);
+  seekTo(LYRICS[i].t + 0.01);
+});
+document.getElementById('next').addEventListener('click', () => {
+  const i = Math.min(LYRICS.length - 1, currentIndex(state.t) + 1);
+  seekTo(LYRICS[i].t + 0.01);
+});
+
+/* 进度条拖拽 */
+let dragging = false;
+function seekAt(clientX){
+  const r = bar.getBoundingClientRect();
+  const p = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  seekTo(p * DURATION);
+}
+bar.addEventListener('pointerdown', e => {
+  dragging = true; bar.setPointerCapture(e.pointerId); seekAt(e.clientX);
+});
+bar.addEventListener('pointermove', e => { if (dragging) seekAt(e.clientX); });
+bar.addEventListener('pointerup', e => { dragging = false; });
+bar.addEventListener('pointercancel', () => dragging = false);
+
+/* 键盘 */
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space'){ e.preventDefault(); ensureAnalyser(); setPlaying(!state.playing); }
+  if (e.code === 'ArrowRight'){ seekTo(state.t + 5); }
+  if (e.code === 'ArrowLeft'){ seekTo(state.t - 5); }
+});
+
+/* 音量：滑块 + 机身旋钮联动 */
+const vol = document.getElementById('vol');
+const volKnob = document.getElementById('volKnob');
+audio.volume = vol.value / 100;
+vol.addEventListener('input', () => {
+  audio.volume = vol.value / 100;
+  const r = -120 + (vol.value / 100) * 240;
+  volKnob.style.setProperty('--r', r + 'deg');
+});
+
+window.addEventListener('resize', () => centerLine(state.active < 0 ? 0 : state.active));
+if (window.ResizeObserver){
+  new ResizeObserver(() => centerLine(state.active < 0 ? 0 : state.active))
+    .observe(viewport);
+}
+
+/* 开场：先转起来再落针（浏览器若拦截自动播放，就等用户点一下） */
+window.addEventListener('load', () => {
+  paint();
+  setTimeout(() => setPlaying(true), 700);
+});
+</script>
+</body>
+</html>
