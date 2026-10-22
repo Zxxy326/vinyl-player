@@ -16,6 +16,19 @@ _t*.html
 
 # 本地生成的大图（仓库里用 docs/ 下的压缩版）
 /preview*.png
+/_shot/
+/_shot*.png
+/_crop*.png
+/_baseline.html
 
 # WorkBuddy 本地工程数据
 .workbuddy-ai/
+
+# 构建产物
+/dist/
+/node_modules/
+/src-tauri/target/
+/src-tauri/gen/
+
+# 本地打包好的可执行产物（正式版走 GitHub Releases）
+/release/

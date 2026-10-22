@@ -1,0 +1,193 @@
+/* ============ 左：唱机 ============ */
+.deck{
+  --disc:min(74vh,41vw);
+  position:relative;display:grid;place-items:center;
+  container-type:inline-size;
+}
+.platter{
+  position:relative;width:var(--disc);height:var(--disc);
+  border-radius:50%;
+  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px rgba(38,0,6,.75), 0 0 0 1px rgba(0,0,0,.35);
+  cursor:grab;touch-action:none;
+  -webkit-user-select:none;user-select:none;
+}
+.platter:hover{cursor:grab}
+.is-scratching .platter{cursor:grabbing}
+.platter::after{
+  content:"";position:absolute;top:-1.4%;right:-1.4%;bottom:-1.4%;left:-1.4%;border-radius:50%;pointer-events:none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.07),
+    inset 0 0 26px rgba(255,255,255,.06),
+    0 0 0 10px rgba(0,0,0,.10);
+  transition:box-shadow .35s var(--ease);
+}
+.platter:hover::after{
+  box-shadow:
+    inset 0 0 0 1px rgba(246,234,217,.26),
+    inset 0 0 26px rgba(255,255,255,.06),
+    0 0 0 10px rgba(0,0,0,.10);
+}
+.is-scratching .platter::after{
+  box-shadow:
+    inset 0 0 0 1px rgba(255,120,110,.55),
+    inset 0 0 34px rgba(255,90,74,.16),
+    0 0 0 10px rgba(0,0,0,.10),
+    0 0 44px rgba(255,80,70,.28);
+}
+
+.disc{
+  position:absolute;top:0;right:0;bottom:0;left:0;border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 50%, #1a1a1a 0 30%, #0a0a0a 30.4%, #050505 100%);
+  will-change:transform;
+  transform:rotate(0deg);
+}
+.grooves{
+  position:absolute;top:0;right:0;bottom:0;left:0;border-radius:50%;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.055) 0 .5px, rgba(255,255,255,0) .5px 2.2px),
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,.030) 0 1.4px, rgba(0,0,0,0) 1.4px 7px),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.05) 30%, transparent 31%);
+  opacity:.9;
+}
+.gloss{
+  position:absolute;top:0;right:0;bottom:0;left:0;border-radius:50%;
+  background:conic-gradient(from 20deg,
+    rgba(255,255,255,0) 0deg, rgba(255,255,255,.16) 12deg, rgba(255,255,255,0) 30deg,
+    rgba(255,255,255,0) 148deg, rgba(255,255,255,.11) 166deg, rgba(255,255,255,0) 188deg,
+    rgba(255,255,255,0) 298deg, rgba(255,255,255,.08) 318deg, rgba(255,255,255,0) 338deg);
+  mix-blend-mode:screen;
+}
+.platter::before{
+  content:"";position:absolute;top:0;right:0;bottom:0;left:0;border-radius:50%;pointer-events:none;z-index:5;
+  background:
+    radial-gradient(58% 40% at 28% 22%, rgba(255,255,255,.13) 0%, rgba(255,255,255,0) 62%),
+    radial-gradient(40% 30% at 76% 84%, rgba(255,255,255,.05) 0%, rgba(255,255,255,0) 70%);
+  mix-blend-mode:screen;
+}
+
+/* 中心标：有封面时显示封面 */
+.label{
+  position:absolute;top:33%;right:33%;bottom:33%;left:33%;border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, #e33c46 0%, #d0262f 44%, #a5151e 100%);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.30), inset 0 2px 8px rgba(255,255,255,.12), 0 0 20px rgba(0,0,0,.6);
+  display:grid;place-items:center;overflow:hidden;
+}
+.label svg{width:100%;height:100%;display:block}
+.label .cover{
+  position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:cover;
+  opacity:0;transition:opacity .45s var(--ease);
+}
+.label.has-cover .cover{opacity:1}
+.label.has-cover svg{opacity:0}
+.ring-text{
+  fill:rgba(250,238,226,.92);
+  font-family:"Helvetica Neue",Arial,sans-serif;
+  font-size:10.5px;letter-spacing:1.8px;font-weight:500;
+}
+.mark{fill:none;stroke:rgba(250,238,226,.95);stroke-width:1.5;stroke-linecap:round}
+.spindle{
+  position:absolute;left:50%;top:50%;width:4.5%;height:4.5%;transform:translate(-50%,-50%);
+  border-radius:50%;background:radial-gradient(circle at 40% 35%, #6d6360, #100c0c 70%);
+  box-shadow:0 0 0 1.5px rgba(250,238,226,.55), 0 1px 3px rgba(0,0,0,.8);
+  z-index:2;
+}
+
+/* ---- 唱臂 ---- */
+.tonearm{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;overflow:visible;z-index:6;pointer-events:none}
+#armGroup{
+  transform-box:view-box;transform-origin:95px 5px;
+  transform:rotate(-14deg);
+  transition:transform 1.5s cubic-bezier(.34,.02,.16,1);
+}
+.is-playing #armGroup{transform:rotate(0deg)}
+
+/* ---- 机身小零件 ---- */
+.hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
+.hw.bl{left:2%;bottom:1%}
+.hw.br{right:1%;bottom:1%}
+.hw.tl{left:2%;top:2%;flex-direction:column;align-items:flex-start;gap:6px}
+.hw.bc{left:50%;bottom:1.2%;transform:translateX(-50%);justify-content:center;gap:7px}
+
+.scratch-idle{
+  font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);white-space:nowrap;
+}
+.scratch-live{
+  display:none;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+  color:#ffe2d4;text-shadow:0 0 14px rgba(255,120,100,.55);
+}
+.scratch-live .dir{font-size:9px;letter-spacing:-.08em;opacity:.9}
+.is-scratching .scratch-idle{display:none}
+.is-scratching .scratch-live{display:flex}
+.scratch-live .dir{animation:pulse .5s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.45}to{opacity:1}}
+
+.tag{
+  font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;
+  color:rgba(246,234,217,.55);white-space:nowrap;
+}
+.tag b{display:block;font-weight:500;color:rgba(246,234,217,.9);letter-spacing:.2em}
+
+.eq{display:flex;align-items:flex-end;gap:2.5px;height:22px}
+.eq i{
+  display:block;width:2.5px;border-radius:1px;background:rgba(246,234,217,.78);
+  height:22%;animation:eq .9s ease-in-out infinite alternate;animation-play-state:paused;
+}
+.is-playing .eq i{animation-play-state:running}
+@keyframes eq{from{height:14%}to{height:100%}}
+.eq i:nth-child(1){animation-duration:.72s}
+.eq i:nth-child(2){animation-duration:.51s;animation-delay:-.2s}
+.eq i:nth-child(3){animation-duration:.88s;animation-delay:-.4s}
+.eq i:nth-child(4){animation-duration:.63s;animation-delay:-.1s}
+.eq i:nth-child(5){animation-duration:.97s;animation-delay:-.5s}
+.eq i:nth-child(6){animation-duration:.55s;animation-delay:-.3s}
+.eq i:nth-child(7){animation-duration:.79s;animation-delay:-.6s}
+.eq i:nth-child(8){animation-duration:.68s;animation-delay:-.15s}
+
+.knob{
+  width:clamp(26px,3.4vh,38px);aspect-ratio:1;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, #fbf3e7 0%, #e3d3bd 46%, #b8a68f 78%, #8d7c69 100%);
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18);
+  position:relative;
+}
+.knob::after{
+  content:"";position:absolute;left:50%;top:14%;width:2px;height:26%;
+  background:rgba(60,40,36,.6);border-radius:1px;transform-origin:50% 140%;
+  transform:translateX(-50%) rotate(var(--r,-40deg));
+}
+.led{
+  width:7px;height:7px;border-radius:50%;background:#4a1418;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.5);
+  transition:background .5s, box-shadow .5s;
+}
+.is-playing .led{background:#ff5a4a;box-shadow:0 0 9px 2px rgba(255,90,74,.75), inset 0 0 0 1px rgba(0,0,0,.3)}
+
+/* 视图切换旋钮 */
+.knob-toggle{
+  border:0;padding:0;cursor:pointer;font:inherit;pointer-events:auto;
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18), 0 0 0 1px rgba(246,234,217,.26);
+  transition:box-shadow .3s var(--ease), transform .3s var(--ease);
+}
+.knob-toggle::after{transition:transform .45s var(--ease)}
+.knob-toggle:hover{
+  transform:scale(1.08);
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18), 0 0 0 3px rgba(246,234,217,.24);
+}
+.knob-toggle:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(246,234,217,.55)}
+.knob-toggle::before{
+  content:"Lyrics / Visual";position:absolute;left:50%;bottom:148%;
+  transform:translateX(-50%);
+  font-family:var(--sans);font-size:8px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(246,234,217,.72);white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .25s;
+}
+.knob-toggle:hover::before{opacity:1}
+.knob-toggle[aria-pressed="true"]{
+  box-shadow:0 3px 6px rgba(0,0,0,.45), inset 0 -2px 5px rgba(0,0,0,.18),
+             0 0 0 1.5px rgba(255,150,130,.8), 0 0 16px rgba(255,110,90,.35);
+}
+.knob-toggle:disabled{cursor:default;opacity:.55}

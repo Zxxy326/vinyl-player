@@ -1,0 +1,32 @@
+# 统一按 LF 入库：CI 在 Linux 上构建，index.html 有「构建后必须与提交一致」的校验，
+# 行尾不一致会让 web 工作流误判为过期。gradlew 也必须是 LF 才能在 Linux 上执行。
+* text=auto eol=lf
+
+# Windows 脚本保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制，不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.webp binary
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.m4a binary
+*.ogg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.exe binary
+*.dll binary
+*.apk binary
+*.jar binary
+*.jks binary
+*.keystore binary

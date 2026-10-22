@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# 本机 SDK 路径
+local.properties
+
+# 签名密钥绝不入库（CI 从 secret 解码）
+keystore/
+
+# 前端构建产物（由 scripts/build-web.mjs 生成）
+app/src/main/assets/web/
+
+# IDE
+.idea/
+*.iml

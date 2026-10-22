@@ -1,0 +1,20 @@
+{
+  "name": "vinyl-player",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A vinyl record player UI — web single file, Windows desktop and Android local player.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build-web.mjs",
+    "dev": "node scripts/serve.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "desktop": "node scripts/build-web.mjs && tauri dev",
+    "desktop:build": "node scripts/build-web.mjs && tauri build",
+    "android:build": "node scripts/build-android.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

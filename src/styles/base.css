@@ -1,0 +1,51 @@
+/* ============ 基础 / 布局 ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#f6ead9;
+  --cream-2:#e6d3bd;
+  --cream-dim:rgba(246,234,217,.42);
+  --cream-faint:rgba(246,234,217,.14);
+  --red:#d92b39;
+  --ink:#140a0b;
+  --serif:"Bodoni MT","Didot","Times New Roman","Songti SC","Noto Serif SC",serif;
+  --sans:"Helvetica Neue",Helvetica,"PingFang SC","Microsoft YaHei",Arial,sans-serif;
+  --mono:"SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-l:env(safe-area-inset-left,0px);
+  --safe-r:env(safe-area-inset-right,0px);
+}
+html,body{height:100%}
+body{
+  font-family:var(--sans);
+  color:var(--cream);
+  overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+}
+/* 绒布颗粒：灰度噪点，**不用 mix-blend-mode**
+   （overlay 混合会让整个屏幕每帧重新合成，是安卓 WebView 上最大的性能坑） */
+body::before{
+  content:"";position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:2;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity:.13;
+}
+body::after{
+  content:"";position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:3;
+  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, rgba(30,4,8,.55) 100%);
+}
+
+.stage{
+  position:relative;z-index:1;height:100vh;
+  display:grid;grid-template-columns:1.02fr .98fr;
+  grid-template-rows:minmax(0,1fr);
+  padding:clamp(18px,3.2vh,42px) clamp(20px,3.4vw,64px);
+}
+@supports (height:100dvh){ .stage{height:100dvh} }
+
+/* 低性能档：关噪点、去高光、压低 DPR 由 JS 处理 */
+body.perf-low::before{display:none}
+body.perf-low .gloss{display:none}

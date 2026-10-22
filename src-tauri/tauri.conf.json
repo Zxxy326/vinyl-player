@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Vinyl Player",
+  "version": "2.0.0",
+  "identifier": "io.github.zxxy326.vinylplayer",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:8000",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Vinyl Player",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true,
+        "theme": "Dark",
+        "backgroundColor": "#8b1e26"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"]
+      }
+    },
+    "shortDescription": "Vinyl record player for local music",
+    "longDescription": "A lightweight local music player with a spinning vinyl, drag-to-scratch, synced lyrics and a live spectrum analyser."
+  }
+}

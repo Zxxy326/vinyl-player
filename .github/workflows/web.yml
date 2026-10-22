@@ -1,0 +1,34 @@
+name: web
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build single-file player
+        run: node scripts/build-web.mjs
+
+      - name: Fail if the committed index.html is stale
+        run: |
+          if ! git diff --quiet -- index.html; then
+            echo "::error::index.html 与 src/ 不一致，请本地跑 npm run build 后提交"
+            git diff --stat -- index.html
+            exit 1
+          fi
+
+      - name: Sanity check the bundle
+        run: |
+          test -s index.html
+          grep -q "vinyl-player/v2" index.html
+          grep -q "__playerEvent" index.html
+          echo "size: $(wc -c < index.html) bytes"

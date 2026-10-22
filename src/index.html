@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#8b1e26">
+<meta name="description" content="A vinyl record player — spinning disc, drag-to-scratch, synced lyrics and a live spectrum analyser.">
+<title>Signal to Noise — Vinyl Player</title>
+<style>
+/*__STYLES__*/
+</style>
+</head>
+<body>
+<audio id="audio" preload="auto"></audio>
+
+<div class="stage">
+
+  <!-- ================= 左：黑胶唱机 ================= -->
+  <div class="deck" id="deck">
+
+    <div class="platter" id="platter">
+      <div class="disc" id="disc">
+        <div class="grooves"></div>
+        <div class="gloss"></div>
+
+        <div class="label" id="label">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <defs>
+              <path id="ringPath" d="M100,100 m-57,0 a57,57 0 1,1 114,0 a57,57 0 1,1 -114,0"/>
+            </defs>
+            <text class="ring-text">
+              <textPath href="#ringPath" startOffset="0" id="ringText">SIGNAL · NOISE · SIGNAL · NOISE · SIGNAL · NOISE ·</textPath>
+            </text>
+            <g class="mark">
+              <circle cx="88" cy="100" r="12.5"/>
+              <circle cx="112" cy="100" r="12.5"/>
+              <path d="M100 81.5v37"/>
+            </g>
+          </svg>
+          <img class="cover" id="cover" alt="">
+          <div class="spindle"></div>
+        </div>
+      </div>
+
+      <!-- 唱臂 -->
+      <svg class="tonearm" viewBox="0 0 100 100" aria-hidden="true">
+        <defs>
+          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#4b4540"/>
+            <stop offset=".18" stop-color="#d8d0c4"/>
+            <stop offset=".38" stop-color="#8e8780"/>
+            <stop offset=".58" stop-color="#f6f0e6"/>
+            <stop offset=".82" stop-color="#8a837b"/>
+            <stop offset="1" stop-color="#3f3a36"/>
+          </linearGradient>
+          <linearGradient id="metal2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f2ebdf"/>
+            <stop offset=".35" stop-color="#9a938a"/>
+            <stop offset=".62" stop-color="#e8e0d4"/>
+            <stop offset="1" stop-color="#5a534d"/>
+          </linearGradient>
+          <radialGradient id="baseG" cx=".34" cy=".28" r=".85">
+            <stop offset="0" stop-color="#5f5550"/>
+            <stop offset=".5" stop-color="#241e1d"/>
+            <stop offset="1" stop-color="#0b0909"/>
+          </radialGradient>
+          <radialGradient id="pivotG" cx=".36" cy=".3" r=".8">
+            <stop offset="0" stop-color="#e9e1d4"/>
+            <stop offset=".45" stop-color="#8d857c"/>
+            <stop offset="1" stop-color="#3c3733"/>
+          </radialGradient>
+          <linearGradient id="cwG" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#3b3633"/>
+            <stop offset=".3" stop-color="#b3a99c"/>
+            <stop offset=".55" stop-color="#e2d9cb"/>
+            <stop offset=".8" stop-color="#8c8378"/>
+            <stop offset="1" stop-color="#312c29"/>
+          </linearGradient>
+          <filter id="armShadow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="1.6" dy="2.6" stdDeviation="1.6" flood-color="#000" flood-opacity=".6"/>
+          </filter>
+        </defs>
+
+        <g filter="url(#armShadow)">
+          <circle cx="95" cy="5" r="5.6" fill="url(#baseG)"/>
+          <circle cx="95" cy="5" r="5.6" fill="none" stroke="rgba(240,228,212,.30)" stroke-width=".35"/>
+          <circle cx="95" cy="5" r="4.1" fill="none" stroke="rgba(240,228,212,.17)" stroke-width=".4"/>
+          <circle cx="95" cy="5" r="1.9" fill="url(#pivotG)"/>
+          <circle cx="95" cy="5" r=".75" fill="#141010"/>
+        </g>
+
+        <g id="armGroup" filter="url(#armShadow)">
+          <g transform="translate(98.4,-6.2) rotate(17)">
+            <rect x="-2.3" y="-3.9" width="4.6" height="7.8" rx="1.8" fill="url(#cwG)"/>
+            <rect x="-2.3" y="-.9" width="4.6" height=".45" fill="rgba(0,0,0,.55)"/>
+            <rect x="-2.3" y="1.5" width="4.6" height=".45" fill="rgba(0,0,0,.45)"/>
+          </g>
+          <line x1="98.6" y1="-6.6" x2="73.8" y2="75" stroke="url(#metal)" stroke-width="1.05" stroke-linecap="round"/>
+          <g transform="rotate(16.7 73.4 77)">
+            <path d="M71.3 74.6 L75.5 74.6 L76.2 83.4 L70.6 83.4 Z" fill="url(#metal2)" opacity=".97"/>
+            <path d="M70.9 75.6 L75.9 75.6" stroke="rgba(0,0,0,.28)" stroke-width=".35"/>
+            <rect x="70.9" y="81.4" width="5" height="4.4" rx=".7" fill="#241e1c"/>
+            <rect x="72.3" y="82.2" width="2.2" height="1.1" rx=".35" fill="rgba(255,255,255,.16)"/>
+            <circle cx="73.4" cy="86.6" r=".6" fill="#f0e7d9"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+
+    <!-- 机身细节 -->
+    <div class="hw tl">
+      <div class="tag"><b>CRIMSON</b>RECORD PLAYER · 33⅓</div>
+    </div>
+
+    <div class="hw bl">
+      <div class="eq">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="tag">AUDIO<br>LEVEL</div>
+    </div>
+
+    <div class="hw br">
+      <button class="knob knob-toggle" id="viewToggle" style="--r:-52deg"
+              title="切换 歌词 / 可视化" aria-label="切换歌词与可视化" aria-pressed="false"></button>
+      <div class="knob" id="volKnob" style="--r:38deg"></div>
+      <div class="led"></div>
+    </div>
+
+    <div class="hw bc">
+      <div class="scratch-idle">Drag to scratch</div>
+      <div class="scratch-live">
+        <span class="dir" id="scratchDir">◀◀</span>
+        <span id="scratchTime">0:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 右：歌词 / 频谱 ================= -->
+  <div class="panel">
+    <div class="eyebrow"><i class="rule"></i><span id="tEyebrow">SIDE A · TRACK 01</span></div>
+    <h1 class="title" id="tTitle">Signal to Noise</h1>
+    <div class="artist" id="tArtist">Scott Buckley <em>— Cinematic Ambient, 2020</em></div>
+    <div class="credit" id="tCredit">Music · Scott Buckley · <a href="https://www.scottbuckley.com.au/library/signal-to-noise/" target="_blank" rel="noopener">CC BY 4.0</a></div>
+
+    <div class="lyrics" id="lyrics">
+      <div class="lyric-track" id="lyricTrack"></div>
+    </div>
+
+    <!-- 无歌词时显示：实时频谱 -->
+    <div class="visual" id="visual">
+      <div class="viz-head">
+        <span>Spectrum analyser</span>
+        <span class="viz-live"><i></i>Live</span>
+      </div>
+      <div class="viz-wrap"><canvas id="viz"></canvas></div>
+      <div class="viz-foot">
+        <span>40</span><span>120</span><span>500</span><span>2k</span><span>8k</span><span>16k</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="seek">
+        <div class="time" id="tCur">0:00</div>
+        <div class="bar" id="bar">
+          <div class="rail">
+            <div class="fill" id="fill"></div>
+          </div>
+          <div class="dot" id="dot"></div>
+        </div>
+        <div class="time" id="tDur">0:00</div>
+      </div>
+
+      <div class="row">
+        <div class="btns">
+          <button class="btn" id="shuffle" aria-label="随机播放" title="随机播放">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l3 3-3 3"/><path d="M20 6h-3.2a4 4 0 00-3.1 1.5L8.3 15.5A4 4 0 015.2 17H3"/><path d="M17 15l3 3-3 3"/><path d="M20 18h-3.2a4 4 0 01-3.1-1.5l-1.2-1.5"/><path d="M3 6h2.2a4 4 0 013.1 1.5l1.2 1.5"/></svg>
+          </button>
+          <button class="btn" id="prev" aria-label="上一首" title="上一首">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zm3.2 7L19 5.5v13z"/></svg>
+          </button>
+          <button class="btn play" id="play" aria-label="播放">
+            <svg class="i-play" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6L19 12z"/></svg>
+            <svg class="i-pause" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>
+          </button>
+          <button class="btn" id="next" aria-label="下一首" title="下一首">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM5 5.5L14.8 12 5 18.5z"/></svg>
+          </button>
+          <button class="btn" id="repeat" aria-label="循环播放" title="循环播放">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+            <span class="badge" id="repeatBadge" hidden>1</span>
+          </button>
+        </div>
+        <div class="meta">
+          <button class="libbtn" id="libBtn" aria-label="打开曲库" title="曲库">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h11M4 12h11M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M21 16V8l-3 1"/></svg>
+            <span>曲库</span>
+          </button>
+          <div class="rpm" id="rpmLabel">33⅓ RPM · STEREO</div>
+          <div class="vol">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity=".8"><path d="M4 9v6h3.6L13 19V5L7.6 9H4zm11.5-1.4v8.8a5 5 0 000-8.8z"/></svg>
+            <input type="range" min="0" max="100" value="72" id="vol">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 曲库 ================= -->
+<div class="sheet-scrim" id="scrim"></div>
+<aside class="sheet" id="sheet" aria-hidden="true" aria-label="音乐库">
+  <header class="sheet-head">
+    <div class="sheet-title" id="sheetTitle">音乐库<em id="libCount">0</em></div>
+    <button class="sheet-close" id="libClose" aria-label="关闭">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </header>
+
+  <nav class="sheet-tabs" id="sheetTabs" role="tablist">
+    <button class="tab on" data-tab="tracks" role="tab">歌曲</button>
+    <button class="tab" data-tab="albums" role="tab">专辑</button>
+    <button class="tab" data-tab="artists" role="tab">艺术家</button>
+    <button class="tab" data-tab="playlists" role="tab">歌单</button>
+    <button class="tab" data-tab="settings" role="tab">设置</button>
+  </nav>
+
+  <!-- 歌曲 -->
+  <section class="tabpane on" data-pane="tracks">
+    <div class="sheet-tools">
+      <label class="lib-search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <input id="libSearch" type="search" placeholder="搜索歌曲 / 专辑 / 艺术家"
+               autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+        <button class="lib-search-clear" id="libSearchClear" hidden aria-label="清空搜索">×</button>
+      </label>
+      <div class="tool-row">
+        <button class="tool" id="pickBtn">选择音乐文件夹</button>
+        <button class="tool" id="rescanBtn">刷新</button>
+        <button class="tool" id="lrcBtn" hidden>导入歌词</button>
+        <span class="sheet-count" id="libHint"></span>
+      </div>
+    </div>
+    <div class="lib-list" id="libList"></div>
+  </section>
+
+  <!-- 专辑 -->
+  <section class="tabpane" data-pane="albums">
+    <div class="lib-list grid-list" id="albumList"></div>
+  </section>
+
+  <!-- 艺术家 -->
+  <section class="tabpane" data-pane="artists">
+    <div class="lib-list" id="artistList"></div>
+  </section>
+
+  <!-- 歌单 -->
+  <section class="tabpane" data-pane="playlists">
+    <div class="sheet-tools">
+      <div class="tool-row">
+        <input class="pl-input" id="plName" placeholder="新歌单名称" maxlength="40">
+        <button class="tool" id="newPlBtn">新建</button>
+        <span class="sheet-count" id="plHint"></span>
+      </div>
+    </div>
+    <div class="lib-list" id="plList"></div>
+  </section>
+
+  <!-- 设置 -->
+  <section class="tabpane" data-pane="settings">
+    <div class="lib-list settings" id="settingsPane"></div>
+  </section>
+</aside>
+
+<!-- ================= 空态 ================= -->
+<div class="empty" id="empty">
+  <div class="empty-inner">
+    <div class="empty-ring"></div>
+    <h2 id="emptyTitle">把唱片放上来</h2>
+    <p id="emptyDesc">选择一个放音乐的文件夹，<br>它会把里面的歌整理成一张唱片。</p>
+    <div class="empty-actions">
+      <button class="cta" id="emptyPick">选择文件夹</button>
+      <button class="cta ghost" id="emptyDemo" hidden>先听听演示曲</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 加入歌单：多歌单时的选择层 -->
+<div class="plpick" id="plPick" hidden>
+  <div class="plpick-box">
+    <b>加入哪个歌单？</b>
+    <div class="plpick-list" id="plPickList"></div>
+    <button class="tool" id="plPickCancel">取消</button>
+  </div>
+</div>
+
+<script>
+/*__SCRIPT__*/
+</script>
+</body>
+</html>
