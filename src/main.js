@@ -1044,14 +1044,22 @@ window.__rescan = async () => {
      3. 再去 .booting（内容缓进）+ 加 .boot-done（幕淡出），两件事同时发生。 */
 const bootStart = performance.now();
 let bootRevealed = false;
+let windowShown = false;
+
+/* 桌面端窗口是 visible:false 建出来的。这里负责把它放出来 —— 但只是"放出来"，
+   界面还不揭幕：用户先看到的是启动幕（品牌感 + 明确"在启动"），
+   等曲库/首帧准备好再化开，中间不会有半截界面晃一下。 */
+async function showWindow(){
+  if (windowShown || !IS_DESKTOP) return;
+  windowShown = true;
+  try { await invoke('frontend_ready', {}); } catch (_) {}
+}
 
 async function revealApp(){
   if (bootRevealed) return;
   bootRevealed = true;
+  await showWindow();
   if (IS_DESKTOP){
-    // 先把窗口放出来。注意：窗口还是隐藏的时候，浏览器会把 rAF 和 CSS 过渡都挂起，
-    // 所以顺序必须是"先 show → 再等帧 → 再淡入"，反过来会干等到兜底线程。
-    try { await invoke('frontend_ready', {}); } catch (_) {}
     // 窗口刚出现时，幕上的唱片标还要缓缓亮一下，给它一点时间
     await new Promise((r) => setTimeout(r, 240));
   }
@@ -1134,9 +1142,10 @@ async function boot(){
       // 直接进主界面，曲库在后台扫；扫完再把歌填进来。
       // 以前会先弹"正在恢复曲库"挡一屏，目录大时要等好几秒，体感很差。
       showLoading();
-      // 起幕：曲库先到就以曲库为准（第一帧就有歌），
-      // 目录太大也不干等，900ms 之后先把界面放出来。
-      setTimeout(revealApp, 700);
+      // 窗口先出来，让人马上看到"在启动"（启动幕），曲库在幕后扫；
+      // 扫完就揭幕，目录特别大也不干等，最多 1.4 秒。
+      showWindow();
+      setTimeout(revealApp, 1400);
       rescan(S.folder).then((res) => {
         if (res && res.tracks.length){
           setLibrary(res.tracks, false);
