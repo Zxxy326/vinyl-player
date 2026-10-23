@@ -44,6 +44,57 @@ fn resolve_close(
     }
 }
 
+/// 沉浸播放时别让系统休眠。
+/// SetThreadExecutionState 是**线程级**的状态：调用它的线程一退出就失效，
+/// 所以起一个常驻线程持有这个状态，命令只负责给它发消息。
+static AWAKE_TX: std::sync::OnceLock<std::sync::mpsc::Sender<bool>> = std::sync::OnceLock::new();
+
+#[cfg(windows)]
+extern "system" {
+    fn SetThreadExecutionState(flags: u32) -> u32;
+}
+
+fn awake_tx() -> &'static std::sync::mpsc::Sender<bool> {
+    AWAKE_TX.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<bool>();
+        std::thread::spawn(move || {
+            let mut cur = false;
+            for want in rx {
+                if want == cur {
+                    continue;
+                }
+                cur = want;
+                #[cfg(windows)]
+                unsafe {
+                    const ES_CONTINUOUS: u32 = 0x8000_0000;
+                    const ES_SYSTEM_REQUIRED: u32 = 0x0000_0001;
+                    const ES_DISPLAY_REQUIRED: u32 = 0x0000_0002;
+                    let flags = if cur {
+                        ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+                    } else {
+                        ES_CONTINUOUS
+                    };
+                    SetThreadExecutionState(flags);
+                }
+            }
+        });
+        tx
+    })
+}
+
+#[tauri::command]
+fn keep_awake(on: bool) {
+    let _ = awake_tx().send(on);
+}
+
+/// 前端把首帧排好了：这时候才真的把窗口放出来。
+/// 窗口 show() 之后启动幕会立刻开始化开，所以用户看到的第一帧就是启动幕。
+#[tauri::command]
+fn frontend_ready(window: tauri::Window) {
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 #[tauri::command]
 async fn pick_and_scan() -> Result<scan::ScanResult, String> {
     let picked = tauri::async_runtime::spawn_blocking(|| {
@@ -181,10 +232,24 @@ pub fn run() {
             read_lyrics,
             log_line,
             set_close_action,
-            resolve_close
+            resolve_close,
+            keep_awake,
+            frontend_ready
         ])
         .setup(|app| {
             build_tray(app)?;
+            // 窗口是 visible:false 建出来的（见 tauri.conf.json），要等前端说"画好了"再放出来，
+            // 否则用户会先看到一片空底色、再看到界面，也就是那个"闪一下"。
+            // 兜底：前端要是启动阶段就挂了，2.8 秒后无论如何也把窗口放出来。
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(2800));
+                if let Some(w) = handle.get_webview_window("main") {
+                    if !w.is_visible().unwrap_or(true) {
+                        let _ = w.show();
+                    }
+                }
+            });
             Ok(())
         })
         // 关窗口：按用户记住的选择处理；没选过就拦下来问前端

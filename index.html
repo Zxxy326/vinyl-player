@@ -52,6 +52,11 @@ body::after{
   position:relative;z-index:1;height:100vh;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
+  /* 底部基线：右栏传输键那行的**中心线** = 左栏电平表 / 旋钮 / 指示灯的中心线。
+     10px 是 .controls 的下内边距（给播放键的投影留位置），
+     后一项是行高的一半（行高 = 播放键直径 clamp(42px,5.2vh,54px)）。
+     两栏高度一致，所以按这个值反推零件的 bottom 就能对齐，跟窗口高度无关。 */
+  --floor: calc(10px + clamp(21px, 2.6vh, 27px));
   /* 安全区（状态栏 / 刘海 / 手势条）由原生推给 --safe-*，这里统一让开 */
   padding:
     calc(clamp(18px,3.2vh,42px) + var(--safe-t))
@@ -176,9 +181,11 @@ body.perf-low .gloss{display:none}
 /* ---- 机身小零件 ---- */
 .hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
 /* 底部三组（电平表 / 拖拽提示 / 旋钮）统一高度 + 垂直居中，
-   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位 */
+   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位；
+   再按 --floor（面板底部控件那行的中心线）反推 bottom，
+   让左右两栏的底部控件共用同一条水平中心线 */
 .hw.bl,.hw.bc,.hw.br{
-  bottom:1.2%;
+  bottom: calc(var(--floor, 31px) - var(--hw-h, 38px) / 2);
   height:var(--hw-h,38px);
   align-items:center;
 }
@@ -274,6 +281,8 @@ body.perf-low .gloss{display:none}
 .panel{
   display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
   padding-left:clamp(20px,3vw,56px);
+  /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
+  padding-right:8px;
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }
@@ -1035,8 +1044,8 @@ body.perf-low .empty{backdrop-filter:none}
 .titlebar{
   display:none;position:fixed;top:0;left:0;right:0;height:var(--tb-h,36px);
   z-index:90;
-  align-items:center;
-  padding:0 14px;
+  align-items:center;justify-content:flex-end;
+  padding:0 12px;
   background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
   -webkit-user-select:none;user-select:none;
 }
@@ -1147,19 +1156,124 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 .modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap}
 .modal-actions .tool{font-size:11px;padding:9px 14px}
 
+/* ---- 沉浸播放 ----
+   全屏时不显示标题栏；底部控件鼠标停 2.6 秒自动淡出，动一下鼠标/点一下回来。
+   状态类都挂在 body 上：body.immersive / body.ctrl-hidden。 */
+.titlebar{transition:opacity .3s var(--ease)}
+body.immersive .titlebar{opacity:0;pointer-events:none}
+/* 全屏了就别再为标题栏让出 36px */
+body.immersive.is-desktop{--safe-t:14px}
+
+.controls{transition:opacity .45s var(--ease), transform .45s var(--ease)}
+body.ctrl-hidden .controls{opacity:0;transform:translateY(14px);pointer-events:none}
+/* 沉浸时分割线和边框压淡，画面更干净 */
+body.immersive .panel{border-left-color:rgba(246,234,217,.06)}
+body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
+/* 沉浸播放按钮亮起 */
+#immersiveBtn[aria-pressed="true"]{color:var(--cream)}
+#immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
+
+
+/* styles/boot.css */
+/* ============ 启动幕 ============
+   以前桌面端是"窗口先出来（一片底色）→ 界面硬生生换上"，视觉上会闪一下。
+   这里把开场变成一次化开：
+   - 启动幕用的是和应用完全同一块红场，所以淡出时没有任何颜色跳变；
+   - 幕上是唱片标 + 名字，先缓缓亮起来，界面准备好后一起化开；
+   - 界面本身不是"突然出现"，deck 略微放大落位、panel 从下方浮上来，错开 90ms。
+
+   时序由 JS 控制（body.booting → body.boot-done），
+   HTML 里还有一条 2.6 秒的兜底定时器，脚本要是挂了也不会一直卡在幕上。 */
+.veil{
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:300;
+  display:grid;place-items:center;
+  background:
+    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+  box-shadow:inset 0 0 220px rgba(26,3,7,.55);
+  opacity:1;visibility:visible;
+  transition:opacity .85s var(--ease), visibility 0s linear .85s;
+  -webkit-user-select:none;user-select:none;
+}
+body.boot-done .veil{opacity:0;visibility:hidden}
+
+.veil-in{
+  display:flex;flex-direction:column;align-items:center;gap:20px;
+  opacity:0;transform:translateY(8px);
+  animation:veil-in .65s var(--ease) .04s forwards;
+}
+@keyframes veil-in{to{opacity:1;transform:none}}
+
+/* 一张小唱片：中心是米色的标，外圈深色盘面 */
+.veil-disc{
+  position:relative;width:64px;height:64px;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,
+    #f6ead9 0 4.5px, #1a1211 5px 6.5px, #241a18 6.5px 100%);
+  box-shadow:0 0 0 1px rgba(246,234,217,.14), 0 16px 34px -10px rgba(0,0,0,.6);
+  animation:veil-spin 7s linear infinite;
+}
+/* 一道扫过盘面的高光，转起来才看得出在动 */
+.veil-disc::after{
+  content:"";position:absolute;top:-1px;right:-1px;bottom:-1px;left:-1px;border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(255,245,232,0) 0deg, rgba(255,245,232,.20) 26deg,
+    rgba(255,245,232,0) 72deg, rgba(255,245,232,0) 360deg);
+}
+@keyframes veil-spin{to{transform:rotate(360deg)}}
+
+.veil-name{
+  font-family:var(--serif);font-size:10.5px;letter-spacing:.44em;
+  color:rgba(246,234,217,.68);text-indent:.44em;
+}
+.veil-line{
+  width:64px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(246,234,217,.42),transparent);
+}
+
+/* ---- 界面缓进 ---- */
+.deck,.panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
+.panel{transition-delay:.09s}
+body.booting .deck{opacity:0;transform:translateY(16px) scale(.992)}
+body.booting .panel{opacity:0;transform:translateY(12px)}
+/* 标题栏跟着幕一起出现（它本来就压在幕底下，不用单独做过渡） */
+body.booting .titlebar{opacity:0}
+body.booting .stage{pointer-events:none}
+
+@media (prefers-reduced-motion:reduce){
+  .veil-disc{animation:none}
+  .veil-in{animation-duration:.01s}
+  .deck,.panel,.veil{transition-duration:.01s}
+}
+
 </style>
 </head>
-<body>
+<body class="booting">
 <audio id="audio" preload="auto"></audio>
 
-<!-- 桌面端自绘标题栏：Mac 交通灯在左，整条可拖动 -->
+<!-- 启动幕：盖住 WebView 的首帧，等界面准备好再化开（见 styles/boot.css） -->
+<div class="veil" id="veil" aria-hidden="true">
+  <div class="veil-in">
+    <div class="veil-disc"></div>
+    <div class="veil-name">VINYL PLAYER</div>
+    <div class="veil-line"></div>
+  </div>
+</div>
+<script>
+/* 兜底：主脚本万一在启动阶段挂了，2.6 秒后也把幕撤掉，
+   不至于让人对着一块红屏不知道发生了什么（正常路径下这行什么也不做）。 */
+setTimeout(function(){
+  document.body.classList.remove('booting');
+  document.body.classList.add('boot-done');
+}, 2600);
+</script>
+
+<!-- 桌面端自绘标题栏：三个灯在右（Windows 习惯），整条可拖动 -->
 <div class="titlebar" id="titlebar" data-tauri-drag-region>
+  <div class="tb-title">Vinyl Player</div>
   <div class="tb-lights">
-    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
     <button class="tl-btn tl-min" id="winMin" aria-label="最小化" title="最小化"></button>
     <button class="tl-btn tl-max" id="winMax" aria-label="最大化" title="最大化"></button>
+    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
   </div>
-  <div class="tb-title">Vinyl Player</div>
 </div>
 
 <div class="stage">
@@ -1358,6 +1472,9 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity=".8"><path d="M4 9v6h3.6L13 19V5L7.6 9H4zm11.5-1.4v8.8a5 5 0 000-8.8z"/></svg>
             <input type="range" min="0" max="100" value="72" id="vol">
           </div>
+          <button class="libbtn" id="immersiveBtn" aria-label="沉浸播放" title="沉浸播放（F）" aria-pressed="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.2V5.6C4 4.7 4.7 4 5.6 4H9.2"/><path d="M14.8 4h3.6c.9 0 1.6.7 1.6 1.6v3.6"/><path d="M20 14.8v3.6c0 .9-.7 1.6-1.6 1.6h-3.6"/><path d="M9.2 20H5.6C4.7 20 4 19.3 4 18.4v-3.6"/></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -4563,6 +4680,93 @@ $('closeModal').addEventListener('click', (e) => {
   if (e.target === $('closeModal')) closeCloseModal();
 });
 
+/* ================= 沉浸播放 =================
+   全屏 + 底部控件自动隐藏 + 阻止系统休眠。快捷键 F 进 / Esc 退。
+   三端各自的"全屏"和"别睡"都不同，这里分开处理。 */
+let immersive = false;
+let wakeLock = null;
+let ctrlTimer = 0;
+
+async function keepAwake(on){
+  // 安卓：复用原生常亮开关；退出沉浸时按设置里的选择还原
+  if (IS_ANDROID && HAS_ANDROID){
+    try { acall('keepScreenOn', { on: on || !!S.keepOn }); } catch (_) {}
+    return;
+  }
+  // 桌面：SetThreadExecutionState（Rust 侧有常驻线程持有这个状态）
+  if (IS_DESKTOP){
+    try { await invoke('keep_awake', { on }); } catch (_) {}
+    return;
+  }
+  // 网页：Screen Wake Lock。页面切到后台会被系统收走，回来要重新申请
+  try {
+    if (on){
+      if ('wakeLock' in navigator && !wakeLock){
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } else if (wakeLock){
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (_) {}
+}
+
+/* 鼠标一动就把底栏亮出来，2.6 秒没动静再淡下去 */
+function showCtrlBar(){
+  if (!immersive) return;
+  document.body.classList.remove('ctrl-hidden');
+  clearTimeout(ctrlTimer);
+  ctrlTimer = setTimeout(() => {
+    if (immersive) document.body.classList.add('ctrl-hidden');
+  }, 2600);
+}
+
+async function setImmersive(on){
+  if (on === immersive) return;
+  immersive = on;
+  document.body.classList.toggle('immersive', on);
+  const b = $('immersiveBtn');
+  if (b) b.setAttribute('aria-pressed', String(on));
+
+  if (on){
+    if (IS_DESKTOP && TAURI_WIN){
+      const w = win();
+      if (w){ try { await w.setFullscreen(true); } catch (_) {} }
+    } else if (IS_ANDROID && HAS_ANDROID){
+      try { acall('hideStatusBar', { on: true }); } catch (_) {}
+    } else if (document.documentElement.requestFullscreen){
+      try { await document.documentElement.requestFullscreen(); } catch (_) {}
+    }
+    await keepAwake(true);
+    showCtrlBar();
+    toast('沉浸播放 · 按 F 或 Esc 退出');
+  } else {
+    if (IS_DESKTOP && TAURI_WIN){
+      const w = win();
+      if (w){ try { await w.setFullscreen(false); } catch (_) {} }
+    } else if (IS_ANDROID && HAS_ANDROID){
+      try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+    } else if (document.fullscreenElement && document.exitFullscreen){
+      try { await document.exitFullscreen(); } catch (_) {}
+    }
+    await keepAwake(false);
+    clearTimeout(ctrlTimer);
+    document.body.classList.remove('ctrl-hidden');
+  }
+}
+
+if ($('immersiveBtn')) $('immersiveBtn').addEventListener('click', () => setImmersive(!immersive));
+window.addEventListener('pointermove', showCtrlBar, { passive: true });
+window.addEventListener('pointerdown', showCtrlBar, { passive: true });
+/* 浏览器里按 Esc 会自己退全屏，状态跟着同步一下 */
+document.addEventListener('fullscreenchange', () => {
+  if (immersive && !document.fullscreenElement) setImmersive(false);
+});
+/* 从后台回来重新申请 wake lock */
+document.addEventListener('visibilitychange', () => {
+  if (immersive && !document.hidden) keepAwake(true);
+});
+
 /* ================= 事件接线 ================= */
 $('libBtn').addEventListener('click', () => library.toggle());
 $('emptyPick').addEventListener('click', () => pick());
@@ -4609,6 +4813,8 @@ document.addEventListener('keydown', (e) => {
   else if (e.code === 'ArrowUp'){ e.preventDefault(); lyricsView.setActive(Math.max(0, lyricsView.active - 1)); }
   else if (e.code === 'ArrowDown'){ e.preventDefault(); lyricsView.setActive(Math.min(lyricsView.els.length - 1, lyricsView.active + 1)); }
   else if (e.key === 'l' || e.key === 'L'){ library.toggle(); }
+  else if (e.key === 'f' || e.key === 'F'){ setImmersive(!immersive); }
+  else if (e.key === 'Escape' && immersive){ setImmersive(false); }
   else if (e.key === '/'){
     e.preventDefault();
     library.open();
@@ -4714,6 +4920,35 @@ window.__rescan = async () => {
   } catch (_) {}
 };
 
+/* ================= 启动幕 =================
+   HTML 里 body 一开始就带 .booting（deck / panel 是透明的），
+   这里负责在"界面真的准备好了"的时候去掉它：
+     1. 等两帧，确保首帧已经排好版（不然淡入会先露一下错位的布局）；
+     2. 桌面端窗口是用 visible:false 创建的，到这一刻才 show()，
+        所以屏幕上出现的第一帧就是启动幕，不是一片空底色；
+     3. 再去 .booting（内容缓进）+ 加 .boot-done（幕淡出），两件事同时发生。 */
+const bootStart = performance.now();
+let bootRevealed = false;
+
+async function revealApp(){
+  if (bootRevealed) return;
+  bootRevealed = true;
+  if (IS_DESKTOP){
+    // 先把窗口放出来。注意：窗口还是隐藏的时候，浏览器会把 rAF 和 CSS 过渡都挂起，
+    // 所以顺序必须是"先 show → 再等帧 → 再淡入"，反过来会干等到兜底线程。
+    try { await invoke('frontend_ready', {}); } catch (_) {}
+    // 窗口刚出现时，幕上的唱片标还要缓缓亮一下，给它一点时间
+    await new Promise((r) => setTimeout(r, 240));
+  }
+  // 等两帧，确保首帧已经按最终布局排好（不然淡入会先露一下错位的排版）
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // 起幕太快等于没动画，压一个下限
+  const wait = 420 - (performance.now() - bootStart);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  document.body.classList.remove('booting');
+  document.body.classList.add('boot-done');
+}
+
 /* ================= 启动 ================= */
 async function boot(){
   loadPrefs();
@@ -4774,6 +5009,7 @@ async function boot(){
     await playIndex(0, false);
     setTimeout(() => { if (!S.playing) setPlaying(true); }, 700);
     logBoot('boot: web demo');
+    revealApp();
     return;
   }
 
@@ -4783,6 +5019,9 @@ async function boot(){
       // 直接进主界面，曲库在后台扫；扫完再把歌填进来。
       // 以前会先弹"正在恢复曲库"挡一屏，目录大时要等好几秒，体感很差。
       showLoading();
+      // 起幕：曲库先到就以曲库为准（第一帧就有歌），
+      // 目录太大也不干等，900ms 之后先把界面放出来。
+      setTimeout(revealApp, 700);
       rescan(S.folder).then((res) => {
         if (res && res.tracks.length){
           setLibrary(res.tracks, false);
@@ -4794,21 +5033,25 @@ async function boot(){
           savePrefs();
           showEmpty();
         }
+        revealApp();
       }).catch((e) => {
         logBoot('boot: rescan failed ' + (e && e.message));
         // 目录不在了，清掉记忆，避免每次启动都白扫一遍
         S.folder = '';
         savePrefs();
         showEmpty();
+        revealApp();
       });
       return;
     }
     showEmpty();
     logBoot('boot: empty state');
+    revealApp();
     return;
   }
 
   showRestoring();
+  setTimeout(revealApp, 700);
   try {
     const res = await rescan('');
     if (new URLSearchParams(location.search).has('diag')){
@@ -4851,9 +5094,11 @@ async function boot(){
       showEmpty();
     }
     logBoot('boot: android tracks=' + S.tracks.length);
+    revealApp();
   } catch (e){
     showEmpty();
     logBoot('boot: android scan failed');
+    revealApp();
   }
 }
 
@@ -4911,6 +5156,7 @@ if (location.search.indexOf('diag') >= 0){
       libBtn: r('#libBtn'), row: r('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
       controls: r('.controls'), btns: r('.btns'), play: r('#play'),
       hwbr: r('.hw.br'), knob: r('#viewToggle'), volknob: r('#volKnob'),
+      led: r('.hw.br .led'), fav: r('#fav'), ttl: r('.ttl-row'), seek: r('.seek'),
       sheet: r('#sheet'), tabs: r('#sheetTabs'), settings: r('#settingsPane'), cards: r('.stat-cards'), card1: r('.stat-card'), group: r('.set-group')
     });
   }, 1800);

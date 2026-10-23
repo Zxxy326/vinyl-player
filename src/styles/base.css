@@ -42,6 +42,11 @@ body::after{
   position:relative;z-index:1;height:100vh;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
+  /* 底部基线：右栏传输键那行的**中心线** = 左栏电平表 / 旋钮 / 指示灯的中心线。
+     10px 是 .controls 的下内边距（给播放键的投影留位置），
+     后一项是行高的一半（行高 = 播放键直径 clamp(42px,5.2vh,54px)）。
+     两栏高度一致，所以按这个值反推零件的 bottom 就能对齐，跟窗口高度无关。 */
+  --floor: calc(10px + clamp(21px, 2.6vh, 27px));
   /* 安全区（状态栏 / 刘海 / 手势条）由原生推给 --safe-*，这里统一让开 */
   padding:
     calc(clamp(18px,3.2vh,42px) + var(--safe-t))

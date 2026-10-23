@@ -107,9 +107,11 @@
 /* ---- 机身小零件 ---- */
 .hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
 /* 底部三组（电平表 / 拖拽提示 / 旋钮）统一高度 + 垂直居中，
-   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位 */
+   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位；
+   再按 --floor（面板底部控件那行的中心线）反推 bottom，
+   让左右两栏的底部控件共用同一条水平中心线 */
 .hw.bl,.hw.bc,.hw.br{
-  bottom:1.2%;
+  bottom: calc(var(--floor, 31px) - var(--hw-h, 38px) / 2);
   height:var(--hw-h,38px);
   align-items:center;
 }

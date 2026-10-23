@@ -2,6 +2,8 @@
 .panel{
   display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
   padding-left:clamp(20px,3vw,56px);
+  /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
+  padding-right:8px;
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }

@@ -10,17 +10,34 @@
 /*__STYLES__*/
 </style>
 </head>
-<body>
+<body class="booting">
 <audio id="audio" preload="auto"></audio>
 
-<!-- 桌面端自绘标题栏：Mac 交通灯在左，整条可拖动 -->
+<!-- 启动幕：盖住 WebView 的首帧，等界面准备好再化开（见 styles/boot.css） -->
+<div class="veil" id="veil" aria-hidden="true">
+  <div class="veil-in">
+    <div class="veil-disc"></div>
+    <div class="veil-name">VINYL PLAYER</div>
+    <div class="veil-line"></div>
+  </div>
+</div>
+<script>
+/* 兜底：主脚本万一在启动阶段挂了，2.6 秒后也把幕撤掉，
+   不至于让人对着一块红屏不知道发生了什么（正常路径下这行什么也不做）。 */
+setTimeout(function(){
+  document.body.classList.remove('booting');
+  document.body.classList.add('boot-done');
+}, 2600);
+</script>
+
+<!-- 桌面端自绘标题栏：三个灯在右（Windows 习惯），整条可拖动 -->
 <div class="titlebar" id="titlebar" data-tauri-drag-region>
+  <div class="tb-title">Vinyl Player</div>
   <div class="tb-lights">
-    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
     <button class="tl-btn tl-min" id="winMin" aria-label="最小化" title="最小化"></button>
     <button class="tl-btn tl-max" id="winMax" aria-label="最大化" title="最大化"></button>
+    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
   </div>
-  <div class="tb-title">Vinyl Player</div>
 </div>
 
 <div class="stage">
@@ -219,6 +236,9 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" opacity=".8"><path d="M4 9v6h3.6L13 19V5L7.6 9H4zm11.5-1.4v8.8a5 5 0 000-8.8z"/></svg>
             <input type="range" min="0" max="100" value="72" id="vol">
           </div>
+          <button class="libbtn" id="immersiveBtn" aria-label="沉浸播放" title="沉浸播放（F）" aria-pressed="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.2V5.6C4 4.7 4.7 4 5.6 4H9.2"/><path d="M14.8 4h3.6c.9 0 1.6.7 1.6 1.6v3.6"/><path d="M20 14.8v3.6c0 .9-.7 1.6-1.6 1.6h-3.6"/><path d="M9.2 20H5.6C4.7 20 4 19.3 4 18.4v-3.6"/></svg>
+          </button>
         </div>
       </div>
     </div>

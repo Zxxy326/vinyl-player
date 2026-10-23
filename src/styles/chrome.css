@@ -6,8 +6,8 @@
 .titlebar{
   display:none;position:fixed;top:0;left:0;right:0;height:var(--tb-h,36px);
   z-index:90;
-  align-items:center;
-  padding:0 14px;
+  align-items:center;justify-content:flex-end;
+  padding:0 12px;
   background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
   -webkit-user-select:none;user-select:none;
 }
@@ -117,3 +117,20 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 }
 .modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap}
 .modal-actions .tool{font-size:11px;padding:9px 14px}
+
+/* ---- 沉浸播放 ----
+   全屏时不显示标题栏；底部控件鼠标停 2.6 秒自动淡出，动一下鼠标/点一下回来。
+   状态类都挂在 body 上：body.immersive / body.ctrl-hidden。 */
+.titlebar{transition:opacity .3s var(--ease)}
+body.immersive .titlebar{opacity:0;pointer-events:none}
+/* 全屏了就别再为标题栏让出 36px */
+body.immersive.is-desktop{--safe-t:14px}
+
+.controls{transition:opacity .45s var(--ease), transform .45s var(--ease)}
+body.ctrl-hidden .controls{opacity:0;transform:translateY(14px);pointer-events:none}
+/* 沉浸时分割线和边框压淡，画面更干净 */
+body.immersive .panel{border-left-color:rgba(246,234,217,.06)}
+body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
+/* 沉浸播放按钮亮起 */
+#immersiveBtn[aria-pressed="true"]{color:var(--cream)}
+#immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}

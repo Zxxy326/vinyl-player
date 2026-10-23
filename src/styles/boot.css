@@ -1,0 +1,68 @@
+/* ============ 启动幕 ============
+   以前桌面端是"窗口先出来（一片底色）→ 界面硬生生换上"，视觉上会闪一下。
+   这里把开场变成一次化开：
+   - 启动幕用的是和应用完全同一块红场，所以淡出时没有任何颜色跳变；
+   - 幕上是唱片标 + 名字，先缓缓亮起来，界面准备好后一起化开；
+   - 界面本身不是"突然出现"，deck 略微放大落位、panel 从下方浮上来，错开 90ms。
+
+   时序由 JS 控制（body.booting → body.boot-done），
+   HTML 里还有一条 2.6 秒的兜底定时器，脚本要是挂了也不会一直卡在幕上。 */
+.veil{
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:300;
+  display:grid;place-items:center;
+  background:
+    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+  box-shadow:inset 0 0 220px rgba(26,3,7,.55);
+  opacity:1;visibility:visible;
+  transition:opacity .85s var(--ease), visibility 0s linear .85s;
+  -webkit-user-select:none;user-select:none;
+}
+body.boot-done .veil{opacity:0;visibility:hidden}
+
+.veil-in{
+  display:flex;flex-direction:column;align-items:center;gap:20px;
+  opacity:0;transform:translateY(8px);
+  animation:veil-in .65s var(--ease) .04s forwards;
+}
+@keyframes veil-in{to{opacity:1;transform:none}}
+
+/* 一张小唱片：中心是米色的标，外圈深色盘面 */
+.veil-disc{
+  position:relative;width:64px;height:64px;border-radius:50%;
+  background:radial-gradient(circle at 50% 50%,
+    #f6ead9 0 4.5px, #1a1211 5px 6.5px, #241a18 6.5px 100%);
+  box-shadow:0 0 0 1px rgba(246,234,217,.14), 0 16px 34px -10px rgba(0,0,0,.6);
+  animation:veil-spin 7s linear infinite;
+}
+/* 一道扫过盘面的高光，转起来才看得出在动 */
+.veil-disc::after{
+  content:"";position:absolute;top:-1px;right:-1px;bottom:-1px;left:-1px;border-radius:50%;
+  background:conic-gradient(from 0deg,
+    rgba(255,245,232,0) 0deg, rgba(255,245,232,.20) 26deg,
+    rgba(255,245,232,0) 72deg, rgba(255,245,232,0) 360deg);
+}
+@keyframes veil-spin{to{transform:rotate(360deg)}}
+
+.veil-name{
+  font-family:var(--serif);font-size:10.5px;letter-spacing:.44em;
+  color:rgba(246,234,217,.68);text-indent:.44em;
+}
+.veil-line{
+  width:64px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(246,234,217,.42),transparent);
+}
+
+/* ---- 界面缓进 ---- */
+.deck,.panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
+.panel{transition-delay:.09s}
+body.booting .deck{opacity:0;transform:translateY(16px) scale(.992)}
+body.booting .panel{opacity:0;transform:translateY(12px)}
+/* 标题栏跟着幕一起出现（它本来就压在幕底下，不用单独做过渡） */
+body.booting .titlebar{opacity:0}
+body.booting .stage{pointer-events:none}
+
+@media (prefers-reduced-motion:reduce){
+  .veil-disc{animation:none}
+  .veil-in{animation-duration:.01s}
+  .deck,.panel,.veil{transition-duration:.01s}
+}

@@ -795,6 +795,93 @@ $('closeModal').addEventListener('click', (e) => {
   if (e.target === $('closeModal')) closeCloseModal();
 });
 
+/* ================= 沉浸播放 =================
+   全屏 + 底部控件自动隐藏 + 阻止系统休眠。快捷键 F 进 / Esc 退。
+   三端各自的"全屏"和"别睡"都不同，这里分开处理。 */
+let immersive = false;
+let wakeLock = null;
+let ctrlTimer = 0;
+
+async function keepAwake(on){
+  // 安卓：复用原生常亮开关；退出沉浸时按设置里的选择还原
+  if (IS_ANDROID && HAS_ANDROID){
+    try { acall('keepScreenOn', { on: on || !!S.keepOn }); } catch (_) {}
+    return;
+  }
+  // 桌面：SetThreadExecutionState（Rust 侧有常驻线程持有这个状态）
+  if (IS_DESKTOP){
+    try { await invoke('keep_awake', { on }); } catch (_) {}
+    return;
+  }
+  // 网页：Screen Wake Lock。页面切到后台会被系统收走，回来要重新申请
+  try {
+    if (on){
+      if ('wakeLock' in navigator && !wakeLock){
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } else if (wakeLock){
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (_) {}
+}
+
+/* 鼠标一动就把底栏亮出来，2.6 秒没动静再淡下去 */
+function showCtrlBar(){
+  if (!immersive) return;
+  document.body.classList.remove('ctrl-hidden');
+  clearTimeout(ctrlTimer);
+  ctrlTimer = setTimeout(() => {
+    if (immersive) document.body.classList.add('ctrl-hidden');
+  }, 2600);
+}
+
+async function setImmersive(on){
+  if (on === immersive) return;
+  immersive = on;
+  document.body.classList.toggle('immersive', on);
+  const b = $('immersiveBtn');
+  if (b) b.setAttribute('aria-pressed', String(on));
+
+  if (on){
+    if (IS_DESKTOP && TAURI_WIN){
+      const w = win();
+      if (w){ try { await w.setFullscreen(true); } catch (_) {} }
+    } else if (IS_ANDROID && HAS_ANDROID){
+      try { acall('hideStatusBar', { on: true }); } catch (_) {}
+    } else if (document.documentElement.requestFullscreen){
+      try { await document.documentElement.requestFullscreen(); } catch (_) {}
+    }
+    await keepAwake(true);
+    showCtrlBar();
+    toast('沉浸播放 · 按 F 或 Esc 退出');
+  } else {
+    if (IS_DESKTOP && TAURI_WIN){
+      const w = win();
+      if (w){ try { await w.setFullscreen(false); } catch (_) {} }
+    } else if (IS_ANDROID && HAS_ANDROID){
+      try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+    } else if (document.fullscreenElement && document.exitFullscreen){
+      try { await document.exitFullscreen(); } catch (_) {}
+    }
+    await keepAwake(false);
+    clearTimeout(ctrlTimer);
+    document.body.classList.remove('ctrl-hidden');
+  }
+}
+
+if ($('immersiveBtn')) $('immersiveBtn').addEventListener('click', () => setImmersive(!immersive));
+window.addEventListener('pointermove', showCtrlBar, { passive: true });
+window.addEventListener('pointerdown', showCtrlBar, { passive: true });
+/* 浏览器里按 Esc 会自己退全屏，状态跟着同步一下 */
+document.addEventListener('fullscreenchange', () => {
+  if (immersive && !document.fullscreenElement) setImmersive(false);
+});
+/* 从后台回来重新申请 wake lock */
+document.addEventListener('visibilitychange', () => {
+  if (immersive && !document.hidden) keepAwake(true);
+});
+
 /* ================= 事件接线 ================= */
 $('libBtn').addEventListener('click', () => library.toggle());
 $('emptyPick').addEventListener('click', () => pick());
@@ -841,6 +928,8 @@ document.addEventListener('keydown', (e) => {
   else if (e.code === 'ArrowUp'){ e.preventDefault(); lyricsView.setActive(Math.max(0, lyricsView.active - 1)); }
   else if (e.code === 'ArrowDown'){ e.preventDefault(); lyricsView.setActive(Math.min(lyricsView.els.length - 1, lyricsView.active + 1)); }
   else if (e.key === 'l' || e.key === 'L'){ library.toggle(); }
+  else if (e.key === 'f' || e.key === 'F'){ setImmersive(!immersive); }
+  else if (e.key === 'Escape' && immersive){ setImmersive(false); }
   else if (e.key === '/'){
     e.preventDefault();
     library.open();
@@ -946,6 +1035,35 @@ window.__rescan = async () => {
   } catch (_) {}
 };
 
+/* ================= 启动幕 =================
+   HTML 里 body 一开始就带 .booting（deck / panel 是透明的），
+   这里负责在"界面真的准备好了"的时候去掉它：
+     1. 等两帧，确保首帧已经排好版（不然淡入会先露一下错位的布局）；
+     2. 桌面端窗口是用 visible:false 创建的，到这一刻才 show()，
+        所以屏幕上出现的第一帧就是启动幕，不是一片空底色；
+     3. 再去 .booting（内容缓进）+ 加 .boot-done（幕淡出），两件事同时发生。 */
+const bootStart = performance.now();
+let bootRevealed = false;
+
+async function revealApp(){
+  if (bootRevealed) return;
+  bootRevealed = true;
+  if (IS_DESKTOP){
+    // 先把窗口放出来。注意：窗口还是隐藏的时候，浏览器会把 rAF 和 CSS 过渡都挂起，
+    // 所以顺序必须是"先 show → 再等帧 → 再淡入"，反过来会干等到兜底线程。
+    try { await invoke('frontend_ready', {}); } catch (_) {}
+    // 窗口刚出现时，幕上的唱片标还要缓缓亮一下，给它一点时间
+    await new Promise((r) => setTimeout(r, 240));
+  }
+  // 等两帧，确保首帧已经按最终布局排好（不然淡入会先露一下错位的排版）
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // 起幕太快等于没动画，压一个下限
+  const wait = 420 - (performance.now() - bootStart);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  document.body.classList.remove('booting');
+  document.body.classList.add('boot-done');
+}
+
 /* ================= 启动 ================= */
 async function boot(){
   loadPrefs();
@@ -1006,6 +1124,7 @@ async function boot(){
     await playIndex(0, false);
     setTimeout(() => { if (!S.playing) setPlaying(true); }, 700);
     logBoot('boot: web demo');
+    revealApp();
     return;
   }
 
@@ -1015,6 +1134,9 @@ async function boot(){
       // 直接进主界面，曲库在后台扫；扫完再把歌填进来。
       // 以前会先弹"正在恢复曲库"挡一屏，目录大时要等好几秒，体感很差。
       showLoading();
+      // 起幕：曲库先到就以曲库为准（第一帧就有歌），
+      // 目录太大也不干等，900ms 之后先把界面放出来。
+      setTimeout(revealApp, 700);
       rescan(S.folder).then((res) => {
         if (res && res.tracks.length){
           setLibrary(res.tracks, false);
@@ -1026,21 +1148,25 @@ async function boot(){
           savePrefs();
           showEmpty();
         }
+        revealApp();
       }).catch((e) => {
         logBoot('boot: rescan failed ' + (e && e.message));
         // 目录不在了，清掉记忆，避免每次启动都白扫一遍
         S.folder = '';
         savePrefs();
         showEmpty();
+        revealApp();
       });
       return;
     }
     showEmpty();
     logBoot('boot: empty state');
+    revealApp();
     return;
   }
 
   showRestoring();
+  setTimeout(revealApp, 700);
   try {
     const res = await rescan('');
     if (new URLSearchParams(location.search).has('diag')){
@@ -1083,9 +1209,11 @@ async function boot(){
       showEmpty();
     }
     logBoot('boot: android tracks=' + S.tracks.length);
+    revealApp();
   } catch (e){
     showEmpty();
     logBoot('boot: android scan failed');
+    revealApp();
   }
 }
 
@@ -1143,6 +1271,7 @@ if (location.search.indexOf('diag') >= 0){
       libBtn: r('#libBtn'), row: r('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
       controls: r('.controls'), btns: r('.btns'), play: r('#play'),
       hwbr: r('.hw.br'), knob: r('#viewToggle'), volknob: r('#volKnob'),
+      led: r('.hw.br .led'), fav: r('#fav'), ttl: r('.ttl-row'), seek: r('.seek'),
       sheet: r('#sheet'), tabs: r('#sheetTabs'), settings: r('#settingsPane'), cards: r('.stat-cards'), card1: r('.stat-card'), group: r('.set-group')
     });
   }, 1800);
