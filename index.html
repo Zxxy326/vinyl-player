@@ -727,6 +727,10 @@ body.view-visual .visual{display:flex}
   .tonearm{transform:scale(.96);transform-origin:50% 50%}
   .panel{
     border-left:0;padding-left:0;
+    /* 竖屏要把右内边距清掉：桌面为了收藏键悬停不被切加的 8px，
+       会让 .row 的中心比屏幕中心左偏 4px，播放键就不在正中。
+       手机上收藏键没有 hover 放大，不需要这份余量。 */
+    padding-right:0;
     padding-top:14px;overflow:hidden;
   }
   .eyebrow{font-size:8.5px;letter-spacing:.26em}
