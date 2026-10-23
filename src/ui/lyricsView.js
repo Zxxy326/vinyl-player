@@ -12,9 +12,15 @@ export class LyricsView {
     this.signature = '';
 
     // 布局稳定后重新居中：首帧 clientHeight 可能是 0，
-    // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）
+    // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）。
+    // 沉浸切换时面板的 padding 是过渡动画，这里每帧都会回调，
+    // 用 rAF 合流，一帧最多量一次，免得手机上量出掉帧。
     if (window.ResizeObserver){
-      this._ro = new ResizeObserver(() => { if (this.active >= 0) this.center(); });
+      let raf = 0;
+      this._ro = new ResizeObserver(() => {
+        if (this.active < 0 || raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; this.center(); });
+      });
       this._ro.observe(this.viewport);
     }
     if (document.fonts && document.fonts.ready){
@@ -70,8 +76,14 @@ export class LyricsView {
   center(){
     const el = this.els[this.active];
     if (!el) return;
+    /* --lyr-shift 是给「可视窗口和盒子不重合」的情况留的修正量：
+       沉浸模式下歌词盒子的下半截被底部控件和淡出蒙版吃掉，
+       盒子几何居中会让当前这句看着偏下，这里整体再往上提一点。 */
+    const shift = parseFloat(
+      getComputedStyle(this.viewport).getPropertyValue('--lyr-shift')
+    ) || 0;
     const y = el.offsetTop + el.offsetHeight / 2 - this.viewport.clientHeight / 2;
-    this.track.style.transform = 'translate3d(0, ' + (-y) + 'px, 0)';
+    this.track.style.transform = 'translate3d(0, ' + (-y + shift) + 'px, 0)';
   }
 
   /* 主动 seek 时立即定位，不等过渡 */

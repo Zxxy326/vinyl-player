@@ -854,7 +854,10 @@ async function setImmersive(on){
     }
     await keepAwake(true);
     showCtrlBar();
-    toast('沉浸播放 · 按 F 或 Esc 退出');
+    // 手机上没有键盘，别提示快捷键
+    toast(IS_ANDROID || matchMedia('(hover:none)').matches
+      ? '沉浸播放 · 再点一次退出'
+      : '沉浸播放 · 按 F 或 Esc 退出');
   } else {
     if (IS_DESKTOP && TAURI_WIN){
       const w = win();
@@ -945,12 +948,62 @@ if (!IS_ANDROID){
   });
 }
 
+/* 底部控件是绝对定位的（见 panel.css），面板用 padding-bottom 给它留位，
+   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。 */
+const ctrlEl = document.querySelector('.controls');
+if (ctrlEl){
+  const pushCtrlH = () => {
+    document.documentElement.style.setProperty('--ctrl-h', ctrlEl.offsetHeight + 'px');
+  };
+  pushCtrlH();
+  if (window.ResizeObserver) new ResizeObserver(pushCtrlH).observe(ctrlEl);
+}
+
 const reflow = debounce(() => {
   lyricsView.center();
   spectrum.size();
 }, 120);
-window.addEventListener('resize', reflow);
-window.addEventListener('orientationchange', () => setTimeout(reflow, 280));
+
+/* ---- 视口自愈 ----
+   安卓 WebView 声明了 configChanges 自己处理旋转，Chromium 不会重建页面，
+   却会把上一次的 page scale 留着：真机实测旋转后 visualViewport.scale = 1.16、
+   可视区只剩 787×354（屏幕是 914×411），于是整屏被放大、右边被切掉、
+   底部控件掉到屏幕外，来回转还会越转越偏。播放时主线程被渲染循环占满，
+   "旋转后重算视口"这一步更容易被跳过——这就是为什么只有播放状态会跑偏。
+
+   对策：每次视口变化后校验一次 scale，不为 1 就重写 meta viewport 逼
+   Chromium 重新解析（原生壳在 onConfigurationChanged 里也会主动调 __vpHeal）。 */
+const VP_META = document.querySelector('meta[name="viewport"]');
+function healViewport(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  if (vv.scale > 1.02 && VP_META){
+    const cur = VP_META.getAttribute('content') || '';
+    // 先摘掉再写回：值不变也会触发一次 viewport 重新解析
+    VP_META.setAttribute('content', 'width=device-width,initial-scale=1');
+    VP_META.setAttribute('content', cur);
+    void document.documentElement.offsetHeight;
+  }
+  lyricsView.center();
+  spectrum.size();
+}
+/* 原生壳旋转后调用；两次是为了等布局真的落定（有一次是转场动画中途） */
+window.__vpHeal = () => {
+  healViewport();
+  setTimeout(healViewport, 120);
+  setTimeout(healViewport, 360);
+};
+const healSoon = debounce(healViewport, 90);
+
+window.addEventListener('resize', () => { healSoon(); reflow(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(healViewport, 280);
+  setTimeout(healViewport, 620);
+});
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', healSoon);
+  window.visualViewport.addEventListener('scroll', healSoon);
+}
 window.addEventListener('beforeunload', () => {
   flushListen();
   flushStats();
@@ -1264,24 +1317,42 @@ boot().then(() => {
   } catch (_) {}
 });
 
-/* 诊断：访问 ?diag 时把关键盒子尺寸写进 title，便于无头浏览器取值 */
+/* 诊断：访问 ?diag 时把关键盒子尺寸写进 title（无头浏览器取值用），
+   同时叠一张实时数值面板（真机上看，安卓 release 包没法连 CDP） */
 if (location.search.indexOf('diag') >= 0){
+  const rd = (sel) => {
+    const e = typeof sel === 'string' && sel[0] === '#' ? $(sel.slice(1)) : document.querySelector(sel);
+    if (!e) return null;
+    const b = e.getBoundingClientRect();
+    return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
+  };
   setTimeout(() => {
-    const r = (sel) => {
-      const e = typeof sel === 'string' && sel[0] === '#' ? $(sel.slice(1)) : document.querySelector(sel);
-      if (!e) return null;
-      const b = e.getBoundingClientRect();
-      return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
-    };
     document.title = JSON.stringify({
       vw: innerWidth, vh: innerHeight,
-      stage: r('.stage'), deck: r('#deck'), platter: r('#platter'),
-      panel: r('.panel'), lyrics: r('#lyrics'), track: r('#lyricTrack'),
-      libBtn: r('#libBtn'), row: r('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
-      controls: r('.controls'), btns: r('.btns'), play: r('#play'),
-      hwbr: r('.hw.br'), knob: r('#viewToggle'), volknob: r('#volKnob'),
-      led: r('.hw.br .led'), fav: r('#fav'), ttl: r('.ttl-row'), seek: r('.seek'),
-      sheet: r('#sheet'), tabs: r('#sheetTabs'), settings: r('#settingsPane'), cards: r('.stat-cards'), card1: r('.stat-card'), group: r('.set-group')
+      stage: rd('.stage'), deck: rd('#deck'), platter: rd('#platter'),
+      panel: rd('.panel'), lyrics: rd('#lyrics'), track: rd('#lyricTrack'),
+      libBtn: rd('#libBtn'), row: rd('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
+      controls: rd('.controls'), btns: rd('.btns'), play: rd('#play'),
+      hwbr: rd('.hw.br'), knob: rd('#viewToggle'), volknob: rd('#volKnob'),
+      led: rd('.hw.br .led'), fav: rd('#fav'), ttl: rd('.ttl-row'), seek: rd('.seek'),
+      sheet: rd('#sheet'), tabs: rd('#sheetTabs'), settings: rd('#settingsPane'), cards: rd('.stat-cards'), card1: rd('.stat-card'), group: rd('.set-group')
     });
   }, 1800);
+
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:rgba(0,0,0,.82);' +
+    'color:#5f5;font:10px/1.35 monospace;padding:4px 6px;white-space:pre;pointer-events:none';
+  document.body.appendChild(box);
+  setInterval(() => {
+    const vv = window.visualViewport || {};
+    const st = rd('.stage') || [];
+    const pl = rd('#platter') || [];
+    box.textContent =
+      'iw/ih ' + innerWidth + '×' + innerHeight + '  dpr ' + devicePixelRatio + '\n' +
+      'doc ' + document.documentElement.clientWidth + '×' + document.documentElement.clientHeight + '\n' +
+      'vv ' + Math.round(vv.width || 0) + '×' + Math.round(vv.height || 0) + ' s' + (vv.scale || 0).toFixed(2) + '\n' +
+      'land ' + matchMedia('(orientation:landscape)').matches + '  play ' + !!window.__vpPlaying + '\n' +
+      'stage ' + st.join(',') + '\n' +
+      'platter ' + pl.join(',');
+  }, 400);
 }

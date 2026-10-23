@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- maximum-scale=1 是给安卓壳兜底的：WebView 在 configChanges 场景下旋转后
+     会把 page scale 锁在上一次解析的结果（真机实测 1.16），整屏被放大、右边切掉。
+     锁死上限以后 Chromium 再解析也只能回到 1，配合 main.js 里的视口自愈一起用。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#8b1e26">
 <meta name="description" content="A vinyl record player — spinning disc, drag-to-scratch, synced lyrics and a live spectrum analyser.">
 <title>Signal to Noise — Vinyl Player</title>

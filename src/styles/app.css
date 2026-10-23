@@ -209,7 +209,14 @@
      顶部原来留了 60px 的气口，手机屏上这段纯属浪费：收掉之后整台唱机往上抬，
      左右零件是挂在 .deck 下沿上（bottom 反推）的，跟着唱片一起走，相对位置不变；
      .deck 矮了 35px，右栏就多出 35px，标题和歌词都能松一口气 */
-  .deck{--disc:min(38vh,72vw);padding-top:clamp(8px,2.8vh,24px)}
+  .deck{
+    --disc:min(38vh,72vw);
+    padding-top:clamp(8px,2.8vh,24px);
+    /* 唱片抬起来以后，零件和面板内容离唱片太近了。
+       这里只加下内边距：.deck 的高度是 auto，内容盒仍是唱片那么大，
+       所以唱片位置不动，而挂在 bottom:0 的零件和后面整块面板一起往下挪。 */
+    padding-bottom:22px;
+  }
   .tonearm{transform:scale(.96);transform-origin:50% 50%}
   .panel{
     border-left:0;padding-left:0;
@@ -242,7 +249,7 @@
   .lyric .cn{font-size:clamp(10px,2.9vw,12px)}
   .visual{margin-top:10px}
   .controls{margin-top:8px;padding-top:10px}
-  /* 传输键严格居中：曲库靠右浮着，不参与中间这一组的排布。
+  /* 传输键严格居中：曲库靠右、沉浸键靠左，都不参与中间这一组的排布。
      min-height 撑到播放键那么高，绝对居中的那组才不会溢出 */
   .row{
     position:relative;display:flex;align-items:center;justify-content:flex-end;
@@ -251,6 +258,11 @@
   .row .btns{
     position:absolute;left:50%;top:50%;
     transform:translate(-50%,-50%);
+  }
+  /* 沉浸键挪到左半边：竖屏下底部左右各一个入口，中间留给播放键 */
+  .row #immersiveBtn{
+    position:absolute;left:0;top:50%;
+    transform:translateY(-50%);
   }
   .btns{gap:clamp(14px,4.4vw,22px)}
   /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上。
@@ -319,6 +331,12 @@
   .lyrics{margin-top:10px}
   .controls{margin-top:6px;padding-top:8px}
   .row{margin-top:8px}
+  /* 横屏手机右栏只有 395px 宽，传输键 194 + 右侧那串 275 根本排不下，
+     之前就是被挤到重叠、压住 33⅓ 那行的。这里收窄间距并去掉纯装饰的
+     转速铭牌（音量条是真控件，留着） */
+  .btns{gap:12px}
+  .meta{gap:10px}
+  .rpm{display:none}
   /* 零件按比例缩小，保持与桌面端一样的相对位置 */
   .hw{--hw-h:30px}
   .hw .tag{font-size:7.5px;letter-spacing:.2em}

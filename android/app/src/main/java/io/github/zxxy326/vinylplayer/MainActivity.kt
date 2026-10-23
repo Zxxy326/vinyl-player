@@ -231,6 +231,25 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus && hideStatusBar) applyStatusBarVisibility()
     }
 
+    /**
+     * 旋转屏幕时 Activity 不重建（manifest 里声明了 configChanges），
+     * 但 WebView 有概率不重算视口：真机实测旋转后 page scale 还停在 1.16，
+     * 可视区只剩 787×354，界面整体放大、右侧被切、底部控件掉到屏幕外。
+     * 这里在配置变化后主动重排一次，并让前端把视口自愈一遍。
+     */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        web.post {
+            web.requestLayout()
+            try {
+                web.evaluateJavascript("window.__vpHeal&&window.__vpHeal()", null)
+            } catch (_: Throwable) {
+            }
+        }
+        // 刘海 / 手势条的方向变了，安全区要重新算
+        ViewCompat.requestApplyInsets(host)
+    }
+
     private fun configureWebView() {
         val loader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))

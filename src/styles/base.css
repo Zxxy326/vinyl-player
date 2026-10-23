@@ -39,7 +39,12 @@ body::after{
 }
 
 .stage{
-  position:relative;z-index:1;height:100vh;
+  /* 用 position:fixed + inset 铺满，而不是 100vh/100dvh：
+     视口单位要经过一次「视口尺寸解析」，安卓 WebView 旋转屏幕时这一步
+     可能滞后一帧甚至不刷新（真机实测旋转后 vh 还是上一次的值），
+     固定定位的包含块是布局视口本身，永远跟屏幕一致，不用解析。 */
+  position:fixed;top:0;right:0;bottom:0;left:0;
+  z-index:1;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
   /* 底部基线：右栏传输键那行的**中心线** = 左栏电平表 / 旋钮 / 指示灯的中心线。
@@ -54,7 +59,6 @@ body::after{
     calc(clamp(18px,3.2vh,42px) + var(--safe-b))
     calc(clamp(20px,3.4vw,64px) + var(--safe-l));
 }
-@supports (height:100dvh){ .stage{height:100dvh} }
 
 /* 低性能档：关噪点、去高光、压低 DPR 由 JS 处理 */
 body.perf-low::before{display:none}

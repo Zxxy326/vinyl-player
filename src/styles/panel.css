@@ -1,13 +1,18 @@
 /* ============ 右：歌词 / 频谱 ============ */
 .panel{
   display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
-  /* 左右内边距抽成变量：沉浸模式要把底部控件改成绝对定位（歌词往下长），
+  /* 左右内边距抽成变量：底部控件是绝对定位的（见 .controls），
      绝对定位的盒子不受父级 padding 约束，得自己补回同样的量才对得上 */
   --pad-l:clamp(20px,3vw,56px);
   --pad-r:8px;
   padding-left:var(--pad-l);
   /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
   padding-right:var(--pad-r);
+  /* 底部给控件留出它自己的高度（JS 量出来塞进 --ctrl-h）：
+     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉，
+     于是歌词区的长大/收回是个 padding 过渡，而不是"控件突然离场"的硬跳。 */
+  padding-bottom:var(--ctrl-h,96px);
+  transition:padding-bottom .42s var(--ease);
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }
@@ -43,7 +48,12 @@
   transition:color .25s var(--ease), border-color .25s var(--ease),
              background .25s var(--ease), transform .2s var(--ease);
 }
-.fav svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.fav svg{
+  width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;
+  /* 心形的视觉重心在下方两个圆瓣上，几何居中看着会偏低偏左；
+     描边又让左右各多出半个线宽，整体往左上抬半像素才"看着正" */
+  transform:translate(-.5px,-1px);
+}
 .fav:hover{transform:scale(1.06);color:var(--cream)}
 .fav.on{
   color:#ff8a95;border-color:rgba(255,138,149,.55);
@@ -140,7 +150,14 @@ body.view-visual .visual{display:flex}
 }
 
 /* 控制区 */
-.controls{margin-top:clamp(10px,2vh,22px);padding-top:clamp(12px,2vh,20px);
+/* 底部控件：永远浮在面板底边（见 .panel 的 padding-bottom）。
+   以前普通模式是文档流、沉浸模式改成绝对定位，切换时位置会跳一下；
+   现在位置恒定，只有歌词区的留白在变，过渡自然。 */
+.controls{
+  position:absolute;left:0;right:0;bottom:0;
+  padding-left:var(--pad-l);
+  padding-right:var(--pad-r);
+  padding-top:clamp(12px,2vh,20px);
   /* 底部留 10px：播放键的投影和「点亮」小圆点都画在盒子外，
      .panel 又是 overflow:hidden，不留就会被切掉一条 */
   padding-bottom:10px;
@@ -219,6 +236,9 @@ body.view-visual .visual{display:flex}
 .rpm{
   font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:rgba(246,234,217,.42);
   white-space:nowrap;
+  /* 和 .libbtn 统一行高：两者字号相同、行框一样高，基线才对得齐
+     （之前 .libbtn 的行框被 14px 图标撑高，"曲库"两个字看着比右边低 2px） */
+  line-height:14px;
 }
 .vol{display:flex;align-items:center;gap:8px;opacity:.6}
 .vol input{
@@ -234,7 +254,7 @@ body.view-visual .visual{display:flex}
 .libbtn{
   display:flex;align-items:center;gap:7px;
   background:none;border:0;padding:0;cursor:pointer;font:inherit;
-  font-size:9px;letter-spacing:.26em;text-transform:uppercase;
+  font-size:9px;line-height:14px;letter-spacing:.26em;text-transform:uppercase;
   color:rgba(246,234,217,.5);white-space:nowrap;
   transition:color .25s;
 }

@@ -222,6 +222,22 @@ mod base64_lite {
 }
 
 pub fn run() {
+    /* ---- 单实例 ----
+       双击图标时如果已经有一个实例在跑，第二个不建窗口，只把消息递过去然后退出。
+       用 127.0.0.1 上一个固定端口当"已运行"的锁：抢不到就说明前一个还活着。
+       不引插件、不加依赖，Windows 上重复绑定同一端口本来就会失败。 */
+    const IPC_PORT: u16 = 47321;
+    let listener = match std::net::TcpListener::bind(("127.0.0.1", IPC_PORT)) {
+        Ok(l) => l,
+        Err(_) => {
+            use std::io::Write;
+            if let Ok(mut s) = std::net::TcpStream::connect(("127.0.0.1", IPC_PORT)) {
+                let _ = s.write_all(b"focus\n");
+            }
+            return;
+        }
+    };
+
     tauri::Builder::default()
         .manage(CloseState::default())
         .invoke_handler(tauri::generate_handler![
@@ -236,7 +252,18 @@ pub fn run() {
             keep_awake,
             frontend_ready
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            // 已经运行的实例收到第二个实例的消息后，把窗口叫回前台
+            let ipc_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                for stream in listener.incoming() {
+                    let Ok(mut stream) = stream else { continue };
+                    let mut buf = [0u8; 8];
+                    use std::io::Read;
+                    let _ = stream.read(&mut buf);
+                    reveal(&ipc_handle);
+                }
+            });
             build_tray(app)?;
             // 窗口是 visible:false 建出来的（见 tauri.conf.json），要等前端说"画好了"再放出来，
             // 否则用户会先看到一片空底色、再看到界面，也就是那个"闪一下"。

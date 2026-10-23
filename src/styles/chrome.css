@@ -128,23 +128,22 @@ body.immersive.is-desktop{--safe-t:14px}
 
 .controls{transition:opacity .45s var(--ease), transform .45s var(--ease)}
 body.ctrl-hidden .controls{opacity:0;transform:translateY(14px);pointer-events:none}
-/* 沉浸时底部控件改成浮在歌词上——原来它占着近 100px，自动隐藏也只是变透明，
-   位置照样空着，歌词区就长不下去。浮起来以后 .lyrics 作为 flex:1
-   能一直铺到面板底边；控件永远是浮的，所以淡入淡出也不牵动版式，不会跳。 */
-body.immersive .controls{
-  position:absolute;left:0;right:0;bottom:0;
-  margin-top:0;
-  padding-left:var(--pad-l,0px);
-  padding-right:var(--pad-r,0px);
-  /* 一块同色软蒙版，压住的歌词自然淡出去 */
-  background:linear-gradient(180deg,
-    rgba(74,13,20,0) 0%, rgba(74,13,20,.82) 24%, rgba(66,11,17,.96) 100%);
-}
+/* 沉浸：把面板底部的留白收掉，歌词区（flex:1）顺势长到控件底下。
+   控件本身一直是绝对定位浮着的，位置不动，所以整个过程只有歌词区在长，
+   配上 .panel 的 padding-bottom 过渡就是一段连续的动画，而不是硬跳。 */
+body.immersive .panel{padding-bottom:0}
+/* 以前这里压了一块同色渐变当蒙版，问题是底色是径向渐变，写死的暗红
+   在右下角比周围更亮，就成了一块突兀的矩形。改成不放底色：
+   靠下面把歌词的淡出边界提前收住，控件底下自然是空的。 */
 /* 歌词的淡出边界跟着提前收住：默认是铺到盒子底边才化掉，
    沉浸时盒子底下正好压着这排控件，不收就会从控件底下透出来 */
 body.immersive .lyrics{
-  -webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 78px), transparent 100%);
-  mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 78px), transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 148px), transparent calc(100% - 26px));
+  mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 148px), transparent calc(100% - 26px));
+  /* 盒子下沿被控件和淡出蒙版吃掉一截，几何居中会显得当前这句偏低；
+     再往上提一截，当前这句比普通模式明显高一些，同时整簇歌词仍落在
+     看得见的那段窗口中间（上头留给出过的词，下头留给还没唱的）。 */
+  --lyr-shift:-76px;
 }
 /* 沉浸时分割线和边框压淡，画面更干净 */
 body.immersive .panel{border-left-color:rgba(246,234,217,.06)}

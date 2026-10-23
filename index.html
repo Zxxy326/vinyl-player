@@ -2,7 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- maximum-scale=1 是给安卓壳兜底的：WebView 在 configChanges 场景下旋转后
+     会把 page scale 锁在上一次解析的结果（真机实测 1.16），整屏被放大、右边切掉。
+     锁死上限以后 Chromium 再解析也只能回到 1，配合 main.js 里的视口自愈一起用。 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#8b1e26">
 <meta name="description" content="A vinyl record player — spinning disc, drag-to-scratch, synced lyrics and a live spectrum analyser.">
 <title>Signal to Noise — Vinyl Player</title>
@@ -49,7 +52,12 @@ body::after{
 }
 
 .stage{
-  position:relative;z-index:1;height:100vh;
+  /* 用 position:fixed + inset 铺满，而不是 100vh/100dvh：
+     视口单位要经过一次「视口尺寸解析」，安卓 WebView 旋转屏幕时这一步
+     可能滞后一帧甚至不刷新（真机实测旋转后 vh 还是上一次的值），
+     固定定位的包含块是布局视口本身，永远跟屏幕一致，不用解析。 */
+  position:fixed;top:0;right:0;bottom:0;left:0;
+  z-index:1;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
   /* 底部基线：右栏传输键那行的**中心线** = 左栏电平表 / 旋钮 / 指示灯的中心线。
@@ -64,7 +72,6 @@ body::after{
     calc(clamp(18px,3.2vh,42px) + var(--safe-b))
     calc(clamp(20px,3.4vw,64px) + var(--safe-l));
 }
-@supports (height:100dvh){ .stage{height:100dvh} }
 
 /* 低性能档：关噪点、去高光、压低 DPR 由 JS 处理 */
 body.perf-low::before{display:none}
@@ -280,13 +287,18 @@ body.perf-low .gloss{display:none}
 /* ============ 右：歌词 / 频谱 ============ */
 .panel{
   display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
-  /* 左右内边距抽成变量：沉浸模式要把底部控件改成绝对定位（歌词往下长），
+  /* 左右内边距抽成变量：底部控件是绝对定位的（见 .controls），
      绝对定位的盒子不受父级 padding 约束，得自己补回同样的量才对得上 */
   --pad-l:clamp(20px,3vw,56px);
   --pad-r:8px;
   padding-left:var(--pad-l);
   /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
   padding-right:var(--pad-r);
+  /* 底部给控件留出它自己的高度（JS 量出来塞进 --ctrl-h）：
+     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉，
+     于是歌词区的长大/收回是个 padding 过渡，而不是"控件突然离场"的硬跳。 */
+  padding-bottom:var(--ctrl-h,96px);
+  transition:padding-bottom .42s var(--ease);
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }
@@ -322,7 +334,12 @@ body.perf-low .gloss{display:none}
   transition:color .25s var(--ease), border-color .25s var(--ease),
              background .25s var(--ease), transform .2s var(--ease);
 }
-.fav svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.fav svg{
+  width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;
+  /* 心形的视觉重心在下方两个圆瓣上，几何居中看着会偏低偏左；
+     描边又让左右各多出半个线宽，整体往左上抬半像素才"看着正" */
+  transform:translate(-.5px,-1px);
+}
 .fav:hover{transform:scale(1.06);color:var(--cream)}
 .fav.on{
   color:#ff8a95;border-color:rgba(255,138,149,.55);
@@ -419,7 +436,14 @@ body.view-visual .visual{display:flex}
 }
 
 /* 控制区 */
-.controls{margin-top:clamp(10px,2vh,22px);padding-top:clamp(12px,2vh,20px);
+/* 底部控件：永远浮在面板底边（见 .panel 的 padding-bottom）。
+   以前普通模式是文档流、沉浸模式改成绝对定位，切换时位置会跳一下；
+   现在位置恒定，只有歌词区的留白在变，过渡自然。 */
+.controls{
+  position:absolute;left:0;right:0;bottom:0;
+  padding-left:var(--pad-l);
+  padding-right:var(--pad-r);
+  padding-top:clamp(12px,2vh,20px);
   /* 底部留 10px：播放键的投影和「点亮」小圆点都画在盒子外，
      .panel 又是 overflow:hidden，不留就会被切掉一条 */
   padding-bottom:10px;
@@ -498,6 +522,9 @@ body.view-visual .visual{display:flex}
 .rpm{
   font-size:9px;letter-spacing:.28em;text-transform:uppercase;color:rgba(246,234,217,.42);
   white-space:nowrap;
+  /* 和 .libbtn 统一行高：两者字号相同、行框一样高，基线才对得齐
+     （之前 .libbtn 的行框被 14px 图标撑高，"曲库"两个字看着比右边低 2px） */
+  line-height:14px;
 }
 .vol{display:flex;align-items:center;gap:8px;opacity:.6}
 .vol input{
@@ -513,7 +540,7 @@ body.view-visual .visual{display:flex}
 .libbtn{
   display:flex;align-items:center;gap:7px;
   background:none;border:0;padding:0;cursor:pointer;font:inherit;
-  font-size:9px;letter-spacing:.26em;text-transform:uppercase;
+  font-size:9px;line-height:14px;letter-spacing:.26em;text-transform:uppercase;
   color:rgba(246,234,217,.5);white-space:nowrap;
   transition:color .25s;
 }
@@ -733,7 +760,14 @@ body.view-visual .visual{display:flex}
      顶部原来留了 60px 的气口，手机屏上这段纯属浪费：收掉之后整台唱机往上抬，
      左右零件是挂在 .deck 下沿上（bottom 反推）的，跟着唱片一起走，相对位置不变；
      .deck 矮了 35px，右栏就多出 35px，标题和歌词都能松一口气 */
-  .deck{--disc:min(38vh,72vw);padding-top:clamp(8px,2.8vh,24px)}
+  .deck{
+    --disc:min(38vh,72vw);
+    padding-top:clamp(8px,2.8vh,24px);
+    /* 唱片抬起来以后，零件和面板内容离唱片太近了。
+       这里只加下内边距：.deck 的高度是 auto，内容盒仍是唱片那么大，
+       所以唱片位置不动，而挂在 bottom:0 的零件和后面整块面板一起往下挪。 */
+    padding-bottom:22px;
+  }
   .tonearm{transform:scale(.96);transform-origin:50% 50%}
   .panel{
     border-left:0;padding-left:0;
@@ -766,7 +800,7 @@ body.view-visual .visual{display:flex}
   .lyric .cn{font-size:clamp(10px,2.9vw,12px)}
   .visual{margin-top:10px}
   .controls{margin-top:8px;padding-top:10px}
-  /* 传输键严格居中：曲库靠右浮着，不参与中间这一组的排布。
+  /* 传输键严格居中：曲库靠右、沉浸键靠左，都不参与中间这一组的排布。
      min-height 撑到播放键那么高，绝对居中的那组才不会溢出 */
   .row{
     position:relative;display:flex;align-items:center;justify-content:flex-end;
@@ -775,6 +809,11 @@ body.view-visual .visual{display:flex}
   .row .btns{
     position:absolute;left:50%;top:50%;
     transform:translate(-50%,-50%);
+  }
+  /* 沉浸键挪到左半边：竖屏下底部左右各一个入口，中间留给播放键 */
+  .row #immersiveBtn{
+    position:absolute;left:0;top:50%;
+    transform:translateY(-50%);
   }
   .btns{gap:clamp(14px,4.4vw,22px)}
   /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上。
@@ -843,6 +882,12 @@ body.view-visual .visual{display:flex}
   .lyrics{margin-top:10px}
   .controls{margin-top:6px;padding-top:8px}
   .row{margin-top:8px}
+  /* 横屏手机右栏只有 395px 宽，传输键 194 + 右侧那串 275 根本排不下，
+     之前就是被挤到重叠、压住 33⅓ 那行的。这里收窄间距并去掉纯装饰的
+     转速铭牌（音量条是真控件，留着） */
+  .btns{gap:12px}
+  .meta{gap:10px}
+  .rpm{display:none}
   /* 零件按比例缩小，保持与桌面端一样的相对位置 */
   .hw{--hw-h:30px}
   .hw .tag{font-size:7.5px;letter-spacing:.2em}
@@ -1193,23 +1238,22 @@ body.immersive.is-desktop{--safe-t:14px}
 
 .controls{transition:opacity .45s var(--ease), transform .45s var(--ease)}
 body.ctrl-hidden .controls{opacity:0;transform:translateY(14px);pointer-events:none}
-/* 沉浸时底部控件改成浮在歌词上——原来它占着近 100px，自动隐藏也只是变透明，
-   位置照样空着，歌词区就长不下去。浮起来以后 .lyrics 作为 flex:1
-   能一直铺到面板底边；控件永远是浮的，所以淡入淡出也不牵动版式，不会跳。 */
-body.immersive .controls{
-  position:absolute;left:0;right:0;bottom:0;
-  margin-top:0;
-  padding-left:var(--pad-l,0px);
-  padding-right:var(--pad-r,0px);
-  /* 一块同色软蒙版，压住的歌词自然淡出去 */
-  background:linear-gradient(180deg,
-    rgba(74,13,20,0) 0%, rgba(74,13,20,.82) 24%, rgba(66,11,17,.96) 100%);
-}
+/* 沉浸：把面板底部的留白收掉，歌词区（flex:1）顺势长到控件底下。
+   控件本身一直是绝对定位浮着的，位置不动，所以整个过程只有歌词区在长，
+   配上 .panel 的 padding-bottom 过渡就是一段连续的动画，而不是硬跳。 */
+body.immersive .panel{padding-bottom:0}
+/* 以前这里压了一块同色渐变当蒙版，问题是底色是径向渐变，写死的暗红
+   在右下角比周围更亮，就成了一块突兀的矩形。改成不放底色：
+   靠下面把歌词的淡出边界提前收住，控件底下自然是空的。 */
 /* 歌词的淡出边界跟着提前收住：默认是铺到盒子底边才化掉，
    沉浸时盒子底下正好压着这排控件，不收就会从控件底下透出来 */
 body.immersive .lyrics{
-  -webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 78px), transparent 100%);
-  mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 78px), transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 148px), transparent calc(100% - 26px));
+  mask-image:linear-gradient(to bottom, transparent 0%, #000 14%, #000 calc(100% - 148px), transparent calc(100% - 26px));
+  /* 盒子下沿被控件和淡出蒙版吃掉一截，几何居中会显得当前这句偏低；
+     再往上提一截，当前这句比普通模式明显高一些，同时整簇歌词仍落在
+     看得见的那段窗口中间（上头留给出过的词，下头留给还没唱的）。 */
+  --lyr-shift:-76px;
 }
 /* 沉浸时分割线和边框压淡，画面更干净 */
 body.immersive .panel{border-left-color:rgba(246,234,217,.06)}
@@ -3022,9 +3066,15 @@ class LyricsView {
     this.signature = '';
 
     // 布局稳定后重新居中：首帧 clientHeight 可能是 0，
-    // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）
+    // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）。
+    // 沉浸切换时面板的 padding 是过渡动画，这里每帧都会回调，
+    // 用 rAF 合流，一帧最多量一次，免得手机上量出掉帧。
     if (window.ResizeObserver){
-      this._ro = new ResizeObserver(() => { if (this.active >= 0) this.center(); });
+      let raf = 0;
+      this._ro = new ResizeObserver(() => {
+        if (this.active < 0 || raf) return;
+        raf = requestAnimationFrame(() => { raf = 0; this.center(); });
+      });
       this._ro.observe(this.viewport);
     }
     if (document.fonts && document.fonts.ready){
@@ -3080,8 +3130,14 @@ class LyricsView {
   center(){
     const el = this.els[this.active];
     if (!el) return;
+    /* --lyr-shift 是给「可视窗口和盒子不重合」的情况留的修正量：
+       沉浸模式下歌词盒子的下半截被底部控件和淡出蒙版吃掉，
+       盒子几何居中会让当前这句看着偏下，这里整体再往上提一点。 */
+    const shift = parseFloat(
+      getComputedStyle(this.viewport).getPropertyValue('--lyr-shift')
+    ) || 0;
     const y = el.offsetTop + el.offsetHeight / 2 - this.viewport.clientHeight / 2;
-    this.track.style.transform = 'translate3d(0, ' + (-y) + 'px, 0)';
+    this.track.style.transform = 'translate3d(0, ' + (-y + shift) + 'px, 0)';
   }
 
   /* 主动 seek 时立即定位，不等过渡 */
@@ -3814,8 +3870,6 @@ class Library {
             seg('tray', '后台播放') +
             seg('ask', '每次询问') +
           '</div>' +
-          '<p class="set-note">选「后台播放」会把窗口收进托盘，歌继续放；点托盘图标可以叫回来。' +
-          '选过一次就不再弹确认框，想改回来在这里切。</p>' +
         '</div>'
       : '';
 
@@ -4784,7 +4838,10 @@ async function setImmersive(on){
     }
     await keepAwake(true);
     showCtrlBar();
-    toast('沉浸播放 · 按 F 或 Esc 退出');
+    // 手机上没有键盘，别提示快捷键
+    toast(IS_ANDROID || matchMedia('(hover:none)').matches
+      ? '沉浸播放 · 再点一次退出'
+      : '沉浸播放 · 按 F 或 Esc 退出');
   } else {
     if (IS_DESKTOP && TAURI_WIN){
       const w = win();
@@ -4875,12 +4932,62 @@ if (!IS_ANDROID){
   });
 }
 
+/* 底部控件是绝对定位的（见 panel.css），面板用 padding-bottom 给它留位，
+   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。 */
+const ctrlEl = document.querySelector('.controls');
+if (ctrlEl){
+  const pushCtrlH = () => {
+    document.documentElement.style.setProperty('--ctrl-h', ctrlEl.offsetHeight + 'px');
+  };
+  pushCtrlH();
+  if (window.ResizeObserver) new ResizeObserver(pushCtrlH).observe(ctrlEl);
+}
+
 const reflow = debounce(() => {
   lyricsView.center();
   spectrum.size();
 }, 120);
-window.addEventListener('resize', reflow);
-window.addEventListener('orientationchange', () => setTimeout(reflow, 280));
+
+/* ---- 视口自愈 ----
+   安卓 WebView 声明了 configChanges 自己处理旋转，Chromium 不会重建页面，
+   却会把上一次的 page scale 留着：真机实测旋转后 visualViewport.scale = 1.16、
+   可视区只剩 787×354（屏幕是 914×411），于是整屏被放大、右边被切掉、
+   底部控件掉到屏幕外，来回转还会越转越偏。播放时主线程被渲染循环占满，
+   "旋转后重算视口"这一步更容易被跳过——这就是为什么只有播放状态会跑偏。
+
+   对策：每次视口变化后校验一次 scale，不为 1 就重写 meta viewport 逼
+   Chromium 重新解析（原生壳在 onConfigurationChanged 里也会主动调 __vpHeal）。 */
+const VP_META = document.querySelector('meta[name="viewport"]');
+function healViewport(){
+  const vv = window.visualViewport;
+  if (!vv) return;
+  if (vv.scale > 1.02 && VP_META){
+    const cur = VP_META.getAttribute('content') || '';
+    // 先摘掉再写回：值不变也会触发一次 viewport 重新解析
+    VP_META.setAttribute('content', 'width=device-width,initial-scale=1');
+    VP_META.setAttribute('content', cur);
+    void document.documentElement.offsetHeight;
+  }
+  lyricsView.center();
+  spectrum.size();
+}
+/* 原生壳旋转后调用；两次是为了等布局真的落定（有一次是转场动画中途） */
+window.__vpHeal = () => {
+  healViewport();
+  setTimeout(healViewport, 120);
+  setTimeout(healViewport, 360);
+};
+const healSoon = debounce(healViewport, 90);
+
+window.addEventListener('resize', () => { healSoon(); reflow(); });
+window.addEventListener('orientationchange', () => {
+  setTimeout(healViewport, 280);
+  setTimeout(healViewport, 620);
+});
+if (window.visualViewport){
+  window.visualViewport.addEventListener('resize', healSoon);
+  window.visualViewport.addEventListener('scroll', healSoon);
+}
 window.addEventListener('beforeunload', () => {
   flushListen();
   flushStats();
@@ -5194,26 +5301,44 @@ boot().then(() => {
   } catch (_) {}
 });
 
-/* 诊断：访问 ?diag 时把关键盒子尺寸写进 title，便于无头浏览器取值 */
+/* 诊断：访问 ?diag 时把关键盒子尺寸写进 title（无头浏览器取值用），
+   同时叠一张实时数值面板（真机上看，安卓 release 包没法连 CDP） */
 if (location.search.indexOf('diag') >= 0){
+  const rd = (sel) => {
+    const e = typeof sel === 'string' && sel[0] === '#' ? $(sel.slice(1)) : document.querySelector(sel);
+    if (!e) return null;
+    const b = e.getBoundingClientRect();
+    return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
+  };
   setTimeout(() => {
-    const r = (sel) => {
-      const e = typeof sel === 'string' && sel[0] === '#' ? $(sel.slice(1)) : document.querySelector(sel);
-      if (!e) return null;
-      const b = e.getBoundingClientRect();
-      return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)];
-    };
     document.title = JSON.stringify({
       vw: innerWidth, vh: innerHeight,
-      stage: r('.stage'), deck: r('#deck'), platter: r('#platter'),
-      panel: r('.panel'), lyrics: r('#lyrics'), track: r('#lyricTrack'),
-      libBtn: r('#libBtn'), row: r('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
-      controls: r('.controls'), btns: r('.btns'), play: r('#play'),
-      hwbr: r('.hw.br'), knob: r('#viewToggle'), volknob: r('#volKnob'),
-      led: r('.hw.br .led'), fav: r('#fav'), ttl: r('.ttl-row'), seek: r('.seek'),
-      sheet: r('#sheet'), tabs: r('#sheetTabs'), settings: r('#settingsPane'), cards: r('.stat-cards'), card1: r('.stat-card'), group: r('.set-group')
+      stage: rd('.stage'), deck: rd('#deck'), platter: rd('#platter'),
+      panel: rd('.panel'), lyrics: rd('#lyrics'), track: rd('#lyricTrack'),
+      libBtn: rd('#libBtn'), row: rd('.row'), tf: ($('lyricTrack') || {}).style.transform || '',
+      controls: rd('.controls'), btns: rd('.btns'), play: rd('#play'),
+      hwbr: rd('.hw.br'), knob: rd('#viewToggle'), volknob: rd('#volKnob'),
+      led: rd('.hw.br .led'), fav: rd('#fav'), ttl: rd('.ttl-row'), seek: rd('.seek'),
+      sheet: rd('#sheet'), tabs: rd('#sheetTabs'), settings: rd('#settingsPane'), cards: rd('.stat-cards'), card1: rd('.stat-card'), group: rd('.set-group')
     });
   }, 1800);
+
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:0;top:0;z-index:99999;background:rgba(0,0,0,.82);' +
+    'color:#5f5;font:10px/1.35 monospace;padding:4px 6px;white-space:pre;pointer-events:none';
+  document.body.appendChild(box);
+  setInterval(() => {
+    const vv = window.visualViewport || {};
+    const st = rd('.stage') || [];
+    const pl = rd('#platter') || [];
+    box.textContent =
+      'iw/ih ' + innerWidth + '×' + innerHeight + '  dpr ' + devicePixelRatio + '\n' +
+      'doc ' + document.documentElement.clientWidth + '×' + document.documentElement.clientHeight + '\n' +
+      'vv ' + Math.round(vv.width || 0) + '×' + Math.round(vv.height || 0) + ' s' + (vv.scale || 0).toFixed(2) + '\n' +
+      'land ' + matchMedia('(orientation:landscape)').matches + '  play ' + !!window.__vpPlaying + '\n' +
+      'stage ' + st.join(',') + '\n' +
+      'platter ' + pl.join(',');
+  }, 400);
 }
 
 </script>
