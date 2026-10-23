@@ -175,10 +175,17 @@ body.perf-low .gloss{display:none}
 
 /* ---- 机身小零件 ---- */
 .hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
-.hw.bl{left:2%;bottom:1%}
-.hw.br{right:1%;bottom:1%}
+/* 底部三组（电平表 / 拖拽提示 / 旋钮）统一高度 + 垂直居中，
+   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位 */
+.hw.bl,.hw.bc,.hw.br{
+  bottom:1.2%;
+  height:var(--hw-h,38px);
+  align-items:center;
+}
+.hw.bl{left:2%}
+.hw.br{right:1%}
 .hw.tl{left:2%;top:2%;flex-direction:column;align-items:flex-start;gap:6px}
-.hw.bc{left:50%;bottom:1.2%;transform:translateX(-50%);justify-content:center;gap:7px}
+.hw.bc{left:50%;transform:translateX(-50%);justify-content:center;gap:7px}
 
 .scratch-idle{
   font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;
@@ -289,7 +296,7 @@ body.perf-low .gloss{display:none}
 .ttl-row .title{margin-top:0;flex:1 1 auto;min-width:0}
 .fav{
   flex:0 0 auto;margin-left:auto;
-  width:40px;height:40px;border-radius:50%;
+  width:32px;height:32px;border-radius:50%;
   display:grid;place-items:center;padding:0;
   border:1px solid rgba(246,234,217,.26);
   background:rgba(20,6,8,.22);
@@ -298,7 +305,7 @@ body.perf-low .gloss{display:none}
   transition:color .25s var(--ease), border-color .25s var(--ease),
              background .25s var(--ease), transform .2s var(--ease);
 }
-.fav svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.fav svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
 .fav:hover{transform:scale(1.06);color:var(--cream)}
 .fav.on{
   color:#ff8a95;border-color:rgba(255,138,149,.55);
@@ -570,6 +577,12 @@ body.view-visual .visual{display:flex}
 }
 .tool:hover{background:rgba(246,234,217,.14);border-color:rgba(246,234,217,.34);color:#fff}
 .tool:disabled{opacity:.4;cursor:default}
+/* 分段选择里"当前选中"的那个 */
+.set-actions .tool.on{
+  background:rgba(255,138,149,.18);
+  border-color:rgba(255,138,149,.52);
+  color:#ffdde1;
+}
 .sheet-count{
   margin-left:auto;font-family:var(--mono);font-size:10px;
   letter-spacing:.06em;color:rgba(246,234,217,.34);
@@ -717,20 +730,35 @@ body.view-visual .visual{display:flex}
   .lyric .cn{font-size:clamp(10px,2.9vw,12px)}
   .visual{margin-top:10px}
   .controls{margin-top:8px;padding-top:10px}
-  .row{margin-top:10px;gap:10px}
+  /* 传输键严格居中：曲库靠右浮着，不参与中间这一组的排布。
+     min-height 撑到播放键那么高，绝对居中的那组才不会溢出 */
+  .row{
+    position:relative;display:flex;align-items:center;justify-content:flex-end;
+    margin-top:10px;gap:10px;min-height:52px;
+  }
+  .row .btns{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+  }
   .btns{gap:clamp(14px,4.4vw,22px)}
-  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上
-     电平表贴左边、两颗旋钮贴右边，底部基本与唱片下沿齐平 */
-  .hw.tl,.hw.bc{display:none}
+  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上。
+     三者的底边都与唱片下沿对齐（bottom:0，.deck 的高度就是唱片高度） */
+  .hw.bc{display:none}
+  .hw.tl{
+    display:flex;top:0;left:0;right:auto;bottom:auto;
+    flex-direction:column;align-items:flex-start;gap:0;
+  }
+  /* 竖屏不显示 CRIMSON 铭牌，只留「本次已听」 */
+  .hw.tl .tag{display:none}
   .hw.bl{
-    display:flex;left:0;bottom:5%;
+    display:flex;left:0;bottom:0;
     flex-direction:column;align-items:flex-start;gap:6px;
   }
   .hw.bl .eq{height:15px}
   .hw.bl .tag{font-size:7.5px;letter-spacing:.22em;line-height:1.4}
   .hw.br{
-    display:flex;right:0;bottom:1%;left:auto;
-    flex-direction:row;align-items:center;gap:6px;
+    display:flex;right:0;bottom:0;left:auto;
+    flex-direction:row;align-items:flex-end;gap:6px;
   }
   .hw.br .knob{width:26px}
   /* 竖屏只隐藏指示灯；两个旋钮都保留（之前的写法把音量旋钮也一起藏了，看着像少了一个按钮） */
@@ -762,7 +790,8 @@ body.view-visual .visual{display:flex}
   .play{width:44px}
 }
 
-/* 横屏手机（高度很小）：压扁但不换版式 */
+/* 横屏手机（高度很小）：跟桌面端同一套版式，只是整体收一档。
+   这里不要再隐藏零件（之前把 CRIMSON 铭牌和电平表藏了，横屏看着像另一个应用） */
 @media (orientation:landscape) and (max-height:520px){
   .stage{
     padding:
@@ -771,14 +800,19 @@ body.view-visual .visual{display:flex}
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
-  .deck{--disc:min(78vh,34vw)}
+  .deck{--disc:min(80vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
   .credit{display:none}
   .lyrics{margin-top:10px}
   .controls{margin-top:6px;padding-top:8px}
   .row{margin-top:8px}
-  .hw.tl,.hw.bl{display:none}
+  /* 零件按比例缩小，保持与桌面端一样的相对位置 */
+  .hw{--hw-h:30px}
+  .hw .tag{font-size:7.5px;letter-spacing:.2em}
+  .hw.bl .eq{height:16px}
+  .hw.br .knob{width:24px}
+  .hw.br .led{width:6px;height:6px}
 }
 
 /* 平板 / 中等宽度：两栏但收紧 */
@@ -991,10 +1025,142 @@ body.perf-low .empty{backdrop-filter:none}
   .settings{padding-bottom:calc(24px + var(--safe-b))}
 }
 
+
+/* styles/chrome.css */
+/* ============ 桌面端外壳：自绘标题栏 / 关闭确认 / 本次收听时长 ============ */
+
+/* ---- 自绘标题栏（Mac 交通灯）----
+   Tauri 侧 decorations:false，整条用 data-tauri-drag-region 拖动。
+   只在桌面端显示；网页版和安卓不渲染。 */
+.titlebar{
+  display:none;position:fixed;top:0;left:0;right:0;height:var(--tb-h,36px);
+  z-index:90;
+  align-items:center;
+  padding:0 14px;
+  background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
+  -webkit-user-select:none;user-select:none;
+}
+body.is-desktop .titlebar{display:flex}
+/* 标题栏高度也当成"顶部安全区"，让 .stage 自己让开 */
+body.is-desktop{--tb-h:36px;--safe-t:36px}
+
+.tb-lights{display:flex;align-items:center;gap:8px;flex:none}
+.tl-btn{
+  width:12px;height:12px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  position:relative;flex:none;
+  box-shadow:inset 0 0 0 .5px rgba(0,0,0,.28);
+  transition:filter .15s, transform .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tl-close{background:#ff5f57}
+.tl-min{background:#febc2e}
+.tl-max{background:#28c840}
+/* 非悬停时压暗一点，鼠标进到标题栏才亮起来（Mac 的观感） */
+.titlebar .tl-btn{filter:saturate(.75) brightness(.82)}
+.titlebar:hover .tl-btn{filter:none}
+.tl-btn:hover{filter:brightness(1.12)}
+.tl-btn:active{transform:scale(.9)}
+/* 悬停才显符号，跟 macOS 一致 */
+.tl-btn::after{
+  content:"";position:absolute;inset:0;opacity:0;transition:opacity .12s;
+  background-repeat:no-repeat;background-position:center;background-size:7px 7px;
+}
+.tl-btn:hover::after{opacity:.62}
+.tl-close::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 1.6l6.8 6.8M8.4 1.6l-6.8 6.8' stroke='%23400' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.tl-min::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.8 5h6.4' stroke='%23530' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.tl-max::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2.4 2.4h5.2v5.2H2.4z' stroke='%23040' stroke-width='1.3' fill='none'/%3E%3C/svg%3E");
+}
+
+.tb-title{
+  position:absolute;left:0;right:0;text-align:center;pointer-events:none;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);
+}
+
+/* ---- 本次已听：左上角 ----
+   竖屏时 CRIMSON 那行隐藏，这里顶到最上面 */
+.session{
+  display:flex;flex-direction:column;gap:2px;
+  font-family:var(--mono);line-height:1.25;white-space:nowrap;
+}
+.session .s-k{
+  font-size:8px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(246,234,217,.34);
+}
+.session .s-v{
+  font-size:10px;letter-spacing:.14em;color:rgba(246,234,217,.62);
+}
+/* 数字用衬线体，等宽字体的 0 带斜杠（Ø），看着像乱码 */
+.session .s-v b{
+  font-family:var(--serif);font-weight:400;font-size:15px;
+  color:var(--cream);letter-spacing:.02em;
+}
+.is-playing .session .s-v b{color:#fff}
+
+/* ---- 关闭确认 ----
+   首次关闭问一次，勾了「记住」以后不再问 */
+.modal{
+  position:fixed;inset:0;z-index:120;
+  display:grid;place-items:center;
+  background:rgba(10,2,4,.62);
+  backdrop-filter:blur(3px);
+  opacity:0;pointer-events:none;transition:opacity .22s var(--ease);
+}
+.modal.show{opacity:1;pointer-events:auto}
+.modal-card{
+  width:min(380px,88vw);
+  padding:24px 24px 18px;border-radius:16px;
+  background:linear-gradient(180deg, rgba(46,14,19,.99), rgba(28,8,11,.99));
+  border:1px solid rgba(246,234,217,.14);
+  box-shadow:0 30px 70px -20px rgba(0,0,0,.8);
+  transform:translateY(8px) scale(.985);
+  transition:transform .24s var(--ease);
+}
+.modal.show .modal-card{transform:none}
+.modal-card h2{
+  margin:0;font-family:var(--serif);font-size:17px;font-weight:400;
+  letter-spacing:.04em;color:var(--cream);
+}
+.modal-card p{
+  margin:8px 0 0;font-size:11.5px;line-height:1.7;color:rgba(246,234,217,.5);
+}
+.modal-remember{
+  display:flex;align-items:center;gap:8px;margin-top:16px;
+  font-size:11px;color:rgba(246,234,217,.6);cursor:pointer;
+}
+.modal-remember input{
+  appearance:none;-webkit-appearance:none;margin:0;
+  width:15px;height:15px;border-radius:4px;flex:none;
+  border:1px solid rgba(246,234,217,.3);background:rgba(246,234,217,.06);
+  cursor:pointer;position:relative;
+}
+.modal-remember input:checked{background:rgba(255,138,149,.55);border-color:rgba(255,138,149,.8)}
+.modal-remember input:checked::after{
+  content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;
+  border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg);
+}
+.modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap}
+.modal-actions .tool{font-size:11px;padding:9px 14px}
+
 </style>
 </head>
 <body>
 <audio id="audio" preload="auto"></audio>
+
+<!-- 桌面端自绘标题栏：Mac 交通灯在左，整条可拖动 -->
+<div class="titlebar" id="titlebar" data-tauri-drag-region>
+  <div class="tb-lights">
+    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
+    <button class="tl-btn tl-min" id="winMin" aria-label="最小化" title="最小化"></button>
+    <button class="tl-btn tl-max" id="winMax" aria-label="最大化" title="最大化"></button>
+  </div>
+  <div class="tb-title">Vinyl Player</div>
+</div>
 
 <div class="stage">
 
@@ -1093,6 +1259,10 @@ body.perf-low .empty{backdrop-filter:none}
     <!-- 机身细节 -->
     <div class="hw tl">
       <div class="tag"><b>CRIMSON</b>RECORD PLAYER · 33⅓</div>
+      <div class="session" id="session">
+        <span class="s-k">THIS TIME</span>
+        <span class="s-v"><b id="sessMin">0</b> MIN</span>
+      </div>
     </div>
 
     <div class="hw bl">
@@ -1283,6 +1453,23 @@ body.perf-low .empty{backdrop-filter:none}
   </div>
 </div>
 
+<!-- 关闭确认：只在桌面端首次关闭时出现 -->
+<div class="modal" id="closeModal">
+  <div class="modal-card">
+    <h2>关闭 Vinyl Player</h2>
+    <p>直接退出会停掉播放；收进托盘可以继续放歌，随时从任务栏右下角叫回来。</p>
+    <label class="modal-remember">
+      <input type="checkbox" id="closeRemember">
+      <span>记住我的选择，以后不再询问</span>
+    </label>
+    <div class="modal-actions">
+      <button class="tool" id="closeCancel">取消</button>
+      <button class="tool" id="closeTray">后台播放</button>
+      <button class="cta" id="closeQuit">直接退出</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ---- core/util.js ---- */
 /* 通用小工具 */
@@ -1343,10 +1530,11 @@ const S = {
   perfLow: false,
   folder: '',         // 桌面端上次的目录
   keepOn: false,      // 安卓：保持屏幕常亮
-  hideBar: false      // 安卓：隐藏顶部状态栏
+  hideBar: false,     // 安卓：隐藏顶部状态栏
+  closeAction: 'ask'  // 桌面：关窗口时 'ask' | 'quit' | 'tray'
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, closeAction: 'ask' };
 
 function loadPrefs(){
   try {
@@ -1360,6 +1548,7 @@ function loadPrefs(){
   S.folder = prefs.folder || '';
   S.keepOn = !!prefs.keepOn;
   S.hideBar = !!prefs.hideBar;
+  S.closeAction = (prefs.closeAction === 'quit' || prefs.closeAction === 'tray') ? prefs.closeAction : 'ask';
   return prefs;
 }
 
@@ -1371,6 +1560,7 @@ function savePrefs(){
   prefs.folder = S.folder;
   prefs.keepOn = !!S.keepOn;
   prefs.hideBar = !!S.hideBar;
+  prefs.closeAction = S.closeAction;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }
 
@@ -3445,6 +3635,28 @@ class Library {
         '</div>'
       : '';
 
+    /* 桌面端：关窗口时怎么处理。选过一次就不再弹确认框 */
+    const closeNow = info.closeAction || 'ask';
+    const seg = (key, label, hint) =>
+      '<button class="tool' + (closeNow === key ? ' on' : '') + '" data-set="close-' + key + '">' +
+        label + (hint ? '<em>' + hint + '</em>' : '') +
+      '</button>';
+    const windowGroup = platform === 'desktop'
+      ? '<div class="set-group">' +
+          '<h3>窗口</h3>' +
+          '<div class="kv-row"><span>关闭窗口时</span><b>' +
+            (closeNow === 'quit' ? '直接退出' : closeNow === 'tray' ? '后台播放' : '每次询问') +
+          '</b></div>' +
+          '<div class="set-actions">' +
+            seg('quit', '直接退出') +
+            seg('tray', '后台播放') +
+            seg('ask', '每次询问') +
+          '</div>' +
+          '<p class="set-note">选「后台播放」会把窗口收进托盘，歌继续放；点托盘图标可以叫回来。' +
+          '选过一次就不再弹确认框，想改回来在这里切。</p>' +
+        '</div>'
+      : '';
+
     this.lists.settings.innerHTML =
       '<div class="set-group">' +
         '<h3>音乐库</h3>' +
@@ -3487,6 +3699,8 @@ class Library {
       notifGroup +
 
       screenGroup +
+
+      windowGroup +
 
       '<div class="set-group">' +
         '<h3>关于</h3>' +
@@ -3659,7 +3873,8 @@ function renderLib(extra){
       // ?platform=android 可以在桌面浏览器里预览安卓专属的设置项（截图/调试用）
       platform: DEBUG_PLATFORM || (IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web'),
       folder: S.folder || '',
-      notifOk: notifOk
+      notifOk: notifOk,
+      closeAction: S.closeAction
     },
     view: S.view,
     volume: S.volume,
@@ -3730,6 +3945,7 @@ function paintMeta(tr){
   const pad = String(S.index + 1).padStart(2, '0');
   $('tEyebrow').textContent = tr.eyebrow || ('SIDE A · TRACK ' + pad);
   $('tTitle').textContent = tr.title || '未知曲目';
+  $('tTitle').style.opacity = '';   // 清掉「正在读取曲库」占位时的半透明
   $('tArtist').innerHTML = esc(tr.artist || '未知艺人') +
     (tr.album ? ' <em>— ' + esc(tr.album) + '</em>' : '');
   $('tCredit').innerHTML = tr.creditHtml ||
@@ -4017,6 +4233,15 @@ function showRestoring(){
   $('emptyDemo').hidden = true;
 }
 
+/* 桌面端后台扫曲库时的占位：不挡屏，只在标题区显示"正在读" */
+function showLoading(){
+  $('tEyebrow').textContent = 'LOADING LIBRARY';
+  $('tTitle').textContent = '正在读取曲库…';
+  $('tArtist').textContent = '歌一会儿就来，先转起来';
+  $('tCredit').textContent = '';
+  $('tTitle').style.opacity = '.55';
+}
+
 async function pick(){
   library.setBusy(true);
   try {
@@ -4152,6 +4377,7 @@ function refreshSettings(){
   library.volume = S.volume;
   library.keepOn = S.keepOn;
   library.hideBar = S.hideBar;
+  library.closeAction = S.closeAction;
   library.renderSettings();
 }
 
@@ -4179,9 +4405,28 @@ function doSetting(key){
     applyScreenPrefs();
     refreshSettings();
     toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
+  } else if (key === 'close-quit' || key === 'close-tray' || key === 'close-ask'){
+    S.closeAction = key.slice(6);
+    savePrefs();
+    pushCloseAction();
+    refreshSettings();
+    toast('关闭窗口时：' + closeText(S.closeAction));
   } else if (key === 'notif'){
     if (HAS_ANDROID) acall('openNotifSettings');
   }
+}
+
+/* ================= 本次已听 ================= */
+/* 只统计"真的在播"的墙钟时间，暂停、拖拽、拖进度都不算；重启归零 */
+let sessSec = 0;
+let sessMin = -1;
+
+function paintSession(){
+  const m = Math.floor(sessSec / 60);
+  if (m === sessMin) return;
+  sessMin = m;
+  const el = $('sessMin');
+  if (el) el.textContent = String(m);
 }
 
 /* ================= 提示 ================= */
@@ -4222,6 +4467,8 @@ function loop(now){
   // 收听时长按「实际在播」的墙钟累加，5 秒结算一次
   if (S.playing && !disc.scratching && !S.scrubbing){
     playAccum += dt;
+    sessSec += dt;
+    paintSession();
     if (playAccum >= 5){
       const tr = currentTrack();
       if (tr) addSeconds(tr, playAccum);
@@ -4247,6 +4494,74 @@ function flushListen(){
   }
   playAccum = 0;
 }
+
+/* ================= 桌面外壳：标题栏 / 关闭确认 ================= */
+
+const TAURI_WIN = (() => {
+  try { return (window.__TAURI__ && window.__TAURI__.window) || null; } catch (_) { return null; }
+})();
+
+function win(){
+  try { return TAURI_WIN.getCurrentWindow(); } catch (_) { return null; }
+}
+
+/* Mac 交通灯 + 整条拖动区域 */
+function wireTitlebar(){
+  if (!IS_DESKTOP || !TAURI_WIN) return;
+  const w = win();
+  if (!w) return;
+  const tap = (fn) => () => { try { fn(); } catch (_) {} };
+  $('winMin').addEventListener('click', tap(() => w.minimize()));
+  $('winMax').addEventListener('click', tap(() => w.toggleMaximize()));
+  $('winClose').addEventListener('click', tap(() => w.close()));
+  // 双击标题栏最大化（Mac 习惯），点在按钮上不算
+  $('titlebar').addEventListener('dblclick', (e) => {
+    if (e.target.closest('.tl-btn')) return;
+    try { w.toggleMaximize(); } catch (_) {}
+  });
+}
+
+/* 关闭确认：Rust 侧发现没记住选择时会发 vp://ask-close */
+let closeAsking = false;
+
+function openCloseModal(){
+  if (closeAsking) return;
+  closeAsking = true;
+  $('closeRemember').checked = false;
+  $('closeModal').classList.add('show');
+}
+
+function closeCloseModal(){
+  closeAsking = false;
+  $('closeModal').classList.remove('show');
+}
+
+/* 把当前选择同步给 Rust，下次点关闭就直接照做，不再问 */
+function pushCloseAction(){
+  if (!IS_DESKTOP || !HAS_TAURI) return;
+  try { invoke('set_close_action', { action: S.closeAction }); } catch (_) {}
+}
+
+async function resolveClose(action){
+  const remember = !!$('closeRemember').checked;
+  closeCloseModal();
+  if (remember){
+    S.closeAction = action;
+    savePrefs();
+  }
+  try { await invoke('resolve_close', { action: action, remember: remember }); } catch (_) {}
+}
+
+function closeText(a){
+  return a === 'quit' ? '直接退出' : a === 'tray' ? '后台播放' : '每次询问';
+}
+
+$('closeQuit').addEventListener('click', () => resolveClose('quit'));
+$('closeTray').addEventListener('click', () => resolveClose('tray'));
+$('closeCancel').addEventListener('click', () => closeCloseModal());
+$('closeModal').addEventListener('click', (e) => {
+  if (e.target === $('closeModal')) closeCloseModal();
+});
 
 /* ================= 事件接线 ================= */
 $('libBtn').addEventListener('click', () => library.toggle());
@@ -4435,6 +4750,12 @@ async function boot(){
     await listen('player://command', onCommandEvent);
   }
 
+  if (IS_DESKTOP){
+    wireTitlebar();
+    pushCloseAction();                       // 把"关闭时怎么处理"同步给壳子
+    listen('vp://ask-close', () => openCloseModal());
+  }
+
   watchPerf((p90) => {
     S.perfLow = true;
     document.body.classList.add('perf-low');
@@ -4459,23 +4780,28 @@ async function boot(){
   if (IS_DESKTOP){
     logBoot('boot: desktop, folder=' + (S.folder || '-'));
     if (S.folder){
-      // 大曲库扫描要几秒，先给个占位，别让用户以为曲库丢了
-      showRestoring();
-      try {
-        const res = await rescan(S.folder);
+      // 直接进主界面，曲库在后台扫；扫完再把歌填进来。
+      // 以前会先弹"正在恢复曲库"挡一屏，目录大时要等好几秒，体感很差。
+      showLoading();
+      rescan(S.folder).then((res) => {
         if (res && res.tracks.length){
           setLibrary(res.tracks, false);
           $('empty').classList.remove('show');
           logBoot('boot: restored ' + res.tracks.length + ' tracks');
-          return;
+        } else {
+          logBoot('boot: rescan empty');
+          S.folder = '';
+          savePrefs();
+          showEmpty();
         }
-        logBoot('boot: rescan empty');
-      } catch (e){
+      }).catch((e) => {
         logBoot('boot: rescan failed ' + (e && e.message));
         // 目录不在了，清掉记忆，避免每次启动都白扫一遍
         S.folder = '';
         savePrefs();
-      }
+        showEmpty();
+      });
+      return;
     }
     showEmpty();
     logBoot('boot: empty state');

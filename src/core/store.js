@@ -16,10 +16,11 @@ export const S = {
   perfLow: false,
   folder: '',         // 桌面端上次的目录
   keepOn: false,      // 安卓：保持屏幕常亮
-  hideBar: false      // 安卓：隐藏顶部状态栏
+  hideBar: false,     // 安卓：隐藏顶部状态栏
+  closeAction: 'ask'  // 桌面：关窗口时 'ask' | 'quit' | 'tray'
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, closeAction: 'ask' };
 
 export function loadPrefs(){
   try {
@@ -33,6 +34,7 @@ export function loadPrefs(){
   S.folder = prefs.folder || '';
   S.keepOn = !!prefs.keepOn;
   S.hideBar = !!prefs.hideBar;
+  S.closeAction = (prefs.closeAction === 'quit' || prefs.closeAction === 'tray') ? prefs.closeAction : 'ask';
   return prefs;
 }
 
@@ -44,6 +46,7 @@ export function savePrefs(){
   prefs.folder = S.folder;
   prefs.keepOn = !!S.keepOn;
   prefs.hideBar = !!S.hideBar;
+  prefs.closeAction = S.closeAction;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }
 

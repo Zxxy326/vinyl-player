@@ -13,6 +13,16 @@
 <body>
 <audio id="audio" preload="auto"></audio>
 
+<!-- 桌面端自绘标题栏：Mac 交通灯在左，整条可拖动 -->
+<div class="titlebar" id="titlebar" data-tauri-drag-region>
+  <div class="tb-lights">
+    <button class="tl-btn tl-close" id="winClose" aria-label="关闭" title="关闭"></button>
+    <button class="tl-btn tl-min" id="winMin" aria-label="最小化" title="最小化"></button>
+    <button class="tl-btn tl-max" id="winMax" aria-label="最大化" title="最大化"></button>
+  </div>
+  <div class="tb-title">Vinyl Player</div>
+</div>
+
 <div class="stage">
 
   <!-- ================= 左：黑胶唱机 ================= -->
@@ -110,6 +120,10 @@
     <!-- 机身细节 -->
     <div class="hw tl">
       <div class="tag"><b>CRIMSON</b>RECORD PLAYER · 33⅓</div>
+      <div class="session" id="session">
+        <span class="s-k">THIS TIME</span>
+        <span class="s-v"><b id="sessMin">0</b> MIN</span>
+      </div>
     </div>
 
     <div class="hw bl">
@@ -297,6 +311,23 @@
     <b>加入哪个歌单？</b>
     <div class="plpick-list" id="plPickList"></div>
     <button class="tool" id="plPickCancel">取消</button>
+  </div>
+</div>
+
+<!-- 关闭确认：只在桌面端首次关闭时出现 -->
+<div class="modal" id="closeModal">
+  <div class="modal-card">
+    <h2>关闭 Vinyl Player</h2>
+    <p>直接退出会停掉播放；收进托盘可以继续放歌，随时从任务栏右下角叫回来。</p>
+    <label class="modal-remember">
+      <input type="checkbox" id="closeRemember">
+      <span>记住我的选择，以后不再询问</span>
+    </label>
+    <div class="modal-actions">
+      <button class="tool" id="closeCancel">取消</button>
+      <button class="tool" id="closeTray">后台播放</button>
+      <button class="cta" id="closeQuit">直接退出</button>
+    </div>
   </div>
 </div>
 

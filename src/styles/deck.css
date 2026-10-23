@@ -106,10 +106,17 @@
 
 /* ---- 机身小零件 ---- */
 .hw{position:absolute;z-index:7;display:flex;align-items:center;gap:10px;pointer-events:none}
-.hw.bl{left:2%;bottom:1%}
-.hw.br{right:1%;bottom:1%}
+/* 底部三组（电平表 / 拖拽提示 / 旋钮）统一高度 + 垂直居中，
+   这样它们的中心线永远在同一条线上，不会因为各自内容高低不同而错位 */
+.hw.bl,.hw.bc,.hw.br{
+  bottom:1.2%;
+  height:var(--hw-h,38px);
+  align-items:center;
+}
+.hw.bl{left:2%}
+.hw.br{right:1%}
 .hw.tl{left:2%;top:2%;flex-direction:column;align-items:flex-start;gap:6px}
-.hw.bc{left:50%;bottom:1.2%;transform:translateX(-50%);justify-content:center;gap:7px}
+.hw.bc{left:50%;transform:translateX(-50%);justify-content:center;gap:7px}
 
 .scratch-idle{
   font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;

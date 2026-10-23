@@ -1,0 +1,119 @@
+/* ============ 桌面端外壳：自绘标题栏 / 关闭确认 / 本次收听时长 ============ */
+
+/* ---- 自绘标题栏（Mac 交通灯）----
+   Tauri 侧 decorations:false，整条用 data-tauri-drag-region 拖动。
+   只在桌面端显示；网页版和安卓不渲染。 */
+.titlebar{
+  display:none;position:fixed;top:0;left:0;right:0;height:var(--tb-h,36px);
+  z-index:90;
+  align-items:center;
+  padding:0 14px;
+  background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
+  -webkit-user-select:none;user-select:none;
+}
+body.is-desktop .titlebar{display:flex}
+/* 标题栏高度也当成"顶部安全区"，让 .stage 自己让开 */
+body.is-desktop{--tb-h:36px;--safe-t:36px}
+
+.tb-lights{display:flex;align-items:center;gap:8px;flex:none}
+.tl-btn{
+  width:12px;height:12px;border-radius:50%;border:0;padding:0;cursor:pointer;
+  position:relative;flex:none;
+  box-shadow:inset 0 0 0 .5px rgba(0,0,0,.28);
+  transition:filter .15s, transform .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tl-close{background:#ff5f57}
+.tl-min{background:#febc2e}
+.tl-max{background:#28c840}
+/* 非悬停时压暗一点，鼠标进到标题栏才亮起来（Mac 的观感） */
+.titlebar .tl-btn{filter:saturate(.75) brightness(.82)}
+.titlebar:hover .tl-btn{filter:none}
+.tl-btn:hover{filter:brightness(1.12)}
+.tl-btn:active{transform:scale(.9)}
+/* 悬停才显符号，跟 macOS 一致 */
+.tl-btn::after{
+  content:"";position:absolute;inset:0;opacity:0;transition:opacity .12s;
+  background-repeat:no-repeat;background-position:center;background-size:7px 7px;
+}
+.tl-btn:hover::after{opacity:.62}
+.tl-close::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.6 1.6l6.8 6.8M8.4 1.6l-6.8 6.8' stroke='%23400' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.tl-min::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.8 5h6.4' stroke='%23530' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+.tl-max::after{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2.4 2.4h5.2v5.2H2.4z' stroke='%23040' stroke-width='1.3' fill='none'/%3E%3C/svg%3E");
+}
+
+.tb-title{
+  position:absolute;left:0;right:0;text-align:center;pointer-events:none;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);
+}
+
+/* ---- 本次已听：左上角 ----
+   竖屏时 CRIMSON 那行隐藏，这里顶到最上面 */
+.session{
+  display:flex;flex-direction:column;gap:2px;
+  font-family:var(--mono);line-height:1.25;white-space:nowrap;
+}
+.session .s-k{
+  font-size:8px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(246,234,217,.34);
+}
+.session .s-v{
+  font-size:10px;letter-spacing:.14em;color:rgba(246,234,217,.62);
+}
+/* 数字用衬线体，等宽字体的 0 带斜杠（Ø），看着像乱码 */
+.session .s-v b{
+  font-family:var(--serif);font-weight:400;font-size:15px;
+  color:var(--cream);letter-spacing:.02em;
+}
+.is-playing .session .s-v b{color:#fff}
+
+/* ---- 关闭确认 ----
+   首次关闭问一次，勾了「记住」以后不再问 */
+.modal{
+  position:fixed;inset:0;z-index:120;
+  display:grid;place-items:center;
+  background:rgba(10,2,4,.62);
+  backdrop-filter:blur(3px);
+  opacity:0;pointer-events:none;transition:opacity .22s var(--ease);
+}
+.modal.show{opacity:1;pointer-events:auto}
+.modal-card{
+  width:min(380px,88vw);
+  padding:24px 24px 18px;border-radius:16px;
+  background:linear-gradient(180deg, rgba(46,14,19,.99), rgba(28,8,11,.99));
+  border:1px solid rgba(246,234,217,.14);
+  box-shadow:0 30px 70px -20px rgba(0,0,0,.8);
+  transform:translateY(8px) scale(.985);
+  transition:transform .24s var(--ease);
+}
+.modal.show .modal-card{transform:none}
+.modal-card h2{
+  margin:0;font-family:var(--serif);font-size:17px;font-weight:400;
+  letter-spacing:.04em;color:var(--cream);
+}
+.modal-card p{
+  margin:8px 0 0;font-size:11.5px;line-height:1.7;color:rgba(246,234,217,.5);
+}
+.modal-remember{
+  display:flex;align-items:center;gap:8px;margin-top:16px;
+  font-size:11px;color:rgba(246,234,217,.6);cursor:pointer;
+}
+.modal-remember input{
+  appearance:none;-webkit-appearance:none;margin:0;
+  width:15px;height:15px;border-radius:4px;flex:none;
+  border:1px solid rgba(246,234,217,.3);background:rgba(246,234,217,.06);
+  cursor:pointer;position:relative;
+}
+.modal-remember input:checked{background:rgba(255,138,149,.55);border-color:rgba(255,138,149,.8)}
+.modal-remember input:checked::after{
+  content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;
+  border:solid #fff;border-width:0 1.6px 1.6px 0;transform:rotate(42deg);
+}
+.modal-actions{display:flex;gap:8px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap}
+.modal-actions .tool{font-size:11px;padding:9px 14px}

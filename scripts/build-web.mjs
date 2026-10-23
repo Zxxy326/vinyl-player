@@ -16,7 +16,8 @@ const STYLES = [
   'styles/base.css',
   'styles/deck.css',
   'styles/panel.css',
-  'styles/app.css'
+  'styles/app.css',
+  'styles/chrome.css'
 ];
 
 /* 拓扑序：被依赖的在前 */

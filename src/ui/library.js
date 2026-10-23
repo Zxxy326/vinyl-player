@@ -472,6 +472,28 @@ export class Library {
         '</div>'
       : '';
 
+    /* 桌面端：关窗口时怎么处理。选过一次就不再弹确认框 */
+    const closeNow = info.closeAction || 'ask';
+    const seg = (key, label, hint) =>
+      '<button class="tool' + (closeNow === key ? ' on' : '') + '" data-set="close-' + key + '">' +
+        label + (hint ? '<em>' + hint + '</em>' : '') +
+      '</button>';
+    const windowGroup = platform === 'desktop'
+      ? '<div class="set-group">' +
+          '<h3>窗口</h3>' +
+          '<div class="kv-row"><span>关闭窗口时</span><b>' +
+            (closeNow === 'quit' ? '直接退出' : closeNow === 'tray' ? '后台播放' : '每次询问') +
+          '</b></div>' +
+          '<div class="set-actions">' +
+            seg('quit', '直接退出') +
+            seg('tray', '后台播放') +
+            seg('ask', '每次询问') +
+          '</div>' +
+          '<p class="set-note">选「后台播放」会把窗口收进托盘，歌继续放；点托盘图标可以叫回来。' +
+          '选过一次就不再弹确认框，想改回来在这里切。</p>' +
+        '</div>'
+      : '';
+
     this.lists.settings.innerHTML =
       '<div class="set-group">' +
         '<h3>音乐库</h3>' +
@@ -514,6 +536,8 @@ export class Library {
       notifGroup +
 
       screenGroup +
+
+      windowGroup +
 
       '<div class="set-group">' +
         '<h3>关于</h3>' +

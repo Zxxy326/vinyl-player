@@ -70,6 +70,12 @@
 }
 .tool:hover{background:rgba(246,234,217,.14);border-color:rgba(246,234,217,.34);color:#fff}
 .tool:disabled{opacity:.4;cursor:default}
+/* 分段选择里"当前选中"的那个 */
+.set-actions .tool.on{
+  background:rgba(255,138,149,.18);
+  border-color:rgba(255,138,149,.52);
+  color:#ffdde1;
+}
 .sheet-count{
   margin-left:auto;font-family:var(--mono);font-size:10px;
   letter-spacing:.06em;color:rgba(246,234,217,.34);
@@ -217,20 +223,35 @@
   .lyric .cn{font-size:clamp(10px,2.9vw,12px)}
   .visual{margin-top:10px}
   .controls{margin-top:8px;padding-top:10px}
-  .row{margin-top:10px;gap:10px}
+  /* 传输键严格居中：曲库靠右浮着，不参与中间这一组的排布。
+     min-height 撑到播放键那么高，绝对居中的那组才不会溢出 */
+  .row{
+    position:relative;display:flex;align-items:center;justify-content:flex-end;
+    margin-top:10px;gap:10px;min-height:52px;
+  }
+  .row .btns{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);
+  }
   .btns{gap:clamp(14px,4.4vw,22px)}
-  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上
-     电平表贴左边、两颗旋钮贴右边，底部基本与唱片下沿齐平 */
-  .hw.tl,.hw.bc{display:none}
+  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上。
+     三者的底边都与唱片下沿对齐（bottom:0，.deck 的高度就是唱片高度） */
+  .hw.bc{display:none}
+  .hw.tl{
+    display:flex;top:0;left:0;right:auto;bottom:auto;
+    flex-direction:column;align-items:flex-start;gap:0;
+  }
+  /* 竖屏不显示 CRIMSON 铭牌，只留「本次已听」 */
+  .hw.tl .tag{display:none}
   .hw.bl{
-    display:flex;left:0;bottom:5%;
+    display:flex;left:0;bottom:0;
     flex-direction:column;align-items:flex-start;gap:6px;
   }
   .hw.bl .eq{height:15px}
   .hw.bl .tag{font-size:7.5px;letter-spacing:.22em;line-height:1.4}
   .hw.br{
-    display:flex;right:0;bottom:1%;left:auto;
-    flex-direction:row;align-items:center;gap:6px;
+    display:flex;right:0;bottom:0;left:auto;
+    flex-direction:row;align-items:flex-end;gap:6px;
   }
   .hw.br .knob{width:26px}
   /* 竖屏只隐藏指示灯；两个旋钮都保留（之前的写法把音量旋钮也一起藏了，看着像少了一个按钮） */
@@ -262,7 +283,8 @@
   .play{width:44px}
 }
 
-/* 横屏手机（高度很小）：压扁但不换版式 */
+/* 横屏手机（高度很小）：跟桌面端同一套版式，只是整体收一档。
+   这里不要再隐藏零件（之前把 CRIMSON 铭牌和电平表藏了，横屏看着像另一个应用） */
 @media (orientation:landscape) and (max-height:520px){
   .stage{
     padding:
@@ -271,14 +293,19 @@
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
-  .deck{--disc:min(78vh,34vw)}
+  .deck{--disc:min(80vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
   .credit{display:none}
   .lyrics{margin-top:10px}
   .controls{margin-top:6px;padding-top:8px}
   .row{margin-top:8px}
-  .hw.tl,.hw.bl{display:none}
+  /* 零件按比例缩小，保持与桌面端一样的相对位置 */
+  .hw{--hw-h:30px}
+  .hw .tag{font-size:7.5px;letter-spacing:.2em}
+  .hw.bl .eq{height:16px}
+  .hw.br .knob{width:24px}
+  .hw.br .led{width:6px;height:6px}
 }
 
 /* 平板 / 中等宽度：两栏但收紧 */

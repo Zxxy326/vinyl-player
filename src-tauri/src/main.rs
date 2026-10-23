@@ -49,5 +49,17 @@ fn main() {
     if cli() {
         return;
     }
+    // release 版没有控制台，panic 信息会直接丢掉。写一份到临时目录，出问题好查。
+    std::panic::set_hook(Box::new(|info| {
+        use std::io::Write;
+        let path = std::env::temp_dir().join("vinyl-player-panic.log");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(f, "{info}");
+        }
+    }));
     vinyl_player_lib::run()
 }

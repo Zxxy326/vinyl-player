@@ -4,7 +4,7 @@ import { S, loadPrefs, savePrefs, saveResume, getResume, getLastId, getPlaylists
 import { notePlay, addSeconds, flushStats, resetStats } from './core/stats.js';
 import { libraryStats, fmtBytes, fmtDuration } from './core/quality.js';
 import { HAS_ANDROID, acall, acallJSON } from './core/bridge.js';
-import { IS_WEB, IS_DESKTOP, IS_ANDROID, pickLibrary, rescan, resolvePlayable, loadLyrics, importLyrics, restoreImportedLyrics, loadCover, listen, invoke, setNowLyric } from './core/platform.js';
+import { IS_WEB, IS_DESKTOP, IS_ANDROID, HAS_TAURI, pickLibrary, rescan, resolvePlayable, loadLyrics, importLyrics, restoreImportedLyrics, loadCover, listen, invoke, setNowLyric } from './core/platform.js';
 import { DEMO, DEMO_LYRICS } from './data/demo.js';
 import { lrcToLines } from './lyrics/lrc.js';
 import { WebAudioBackend } from './audio/webaudio.js';
@@ -105,7 +105,8 @@ function renderLib(extra){
       // ?platform=android 可以在桌面浏览器里预览安卓专属的设置项（截图/调试用）
       platform: DEBUG_PLATFORM || (IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web'),
       folder: S.folder || '',
-      notifOk: notifOk
+      notifOk: notifOk,
+      closeAction: S.closeAction
     },
     view: S.view,
     volume: S.volume,
@@ -176,6 +177,7 @@ function paintMeta(tr){
   const pad = String(S.index + 1).padStart(2, '0');
   $('tEyebrow').textContent = tr.eyebrow || ('SIDE A · TRACK ' + pad);
   $('tTitle').textContent = tr.title || '未知曲目';
+  $('tTitle').style.opacity = '';   // 清掉「正在读取曲库」占位时的半透明
   $('tArtist').innerHTML = esc(tr.artist || '未知艺人') +
     (tr.album ? ' <em>— ' + esc(tr.album) + '</em>' : '');
   $('tCredit').innerHTML = tr.creditHtml ||
@@ -463,6 +465,15 @@ function showRestoring(){
   $('emptyDemo').hidden = true;
 }
 
+/* 桌面端后台扫曲库时的占位：不挡屏，只在标题区显示"正在读" */
+function showLoading(){
+  $('tEyebrow').textContent = 'LOADING LIBRARY';
+  $('tTitle').textContent = '正在读取曲库…';
+  $('tArtist').textContent = '歌一会儿就来，先转起来';
+  $('tCredit').textContent = '';
+  $('tTitle').style.opacity = '.55';
+}
+
 async function pick(){
   library.setBusy(true);
   try {
@@ -598,6 +609,7 @@ function refreshSettings(){
   library.volume = S.volume;
   library.keepOn = S.keepOn;
   library.hideBar = S.hideBar;
+  library.closeAction = S.closeAction;
   library.renderSettings();
 }
 
@@ -625,9 +637,28 @@ function doSetting(key){
     applyScreenPrefs();
     refreshSettings();
     toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
+  } else if (key === 'close-quit' || key === 'close-tray' || key === 'close-ask'){
+    S.closeAction = key.slice(6);
+    savePrefs();
+    pushCloseAction();
+    refreshSettings();
+    toast('关闭窗口时：' + closeText(S.closeAction));
   } else if (key === 'notif'){
     if (HAS_ANDROID) acall('openNotifSettings');
   }
+}
+
+/* ================= 本次已听 ================= */
+/* 只统计"真的在播"的墙钟时间，暂停、拖拽、拖进度都不算；重启归零 */
+let sessSec = 0;
+let sessMin = -1;
+
+function paintSession(){
+  const m = Math.floor(sessSec / 60);
+  if (m === sessMin) return;
+  sessMin = m;
+  const el = $('sessMin');
+  if (el) el.textContent = String(m);
 }
 
 /* ================= 提示 ================= */
@@ -668,6 +699,8 @@ function loop(now){
   // 收听时长按「实际在播」的墙钟累加，5 秒结算一次
   if (S.playing && !disc.scratching && !S.scrubbing){
     playAccum += dt;
+    sessSec += dt;
+    paintSession();
     if (playAccum >= 5){
       const tr = currentTrack();
       if (tr) addSeconds(tr, playAccum);
@@ -693,6 +726,74 @@ function flushListen(){
   }
   playAccum = 0;
 }
+
+/* ================= 桌面外壳：标题栏 / 关闭确认 ================= */
+
+const TAURI_WIN = (() => {
+  try { return (window.__TAURI__ && window.__TAURI__.window) || null; } catch (_) { return null; }
+})();
+
+function win(){
+  try { return TAURI_WIN.getCurrentWindow(); } catch (_) { return null; }
+}
+
+/* Mac 交通灯 + 整条拖动区域 */
+function wireTitlebar(){
+  if (!IS_DESKTOP || !TAURI_WIN) return;
+  const w = win();
+  if (!w) return;
+  const tap = (fn) => () => { try { fn(); } catch (_) {} };
+  $('winMin').addEventListener('click', tap(() => w.minimize()));
+  $('winMax').addEventListener('click', tap(() => w.toggleMaximize()));
+  $('winClose').addEventListener('click', tap(() => w.close()));
+  // 双击标题栏最大化（Mac 习惯），点在按钮上不算
+  $('titlebar').addEventListener('dblclick', (e) => {
+    if (e.target.closest('.tl-btn')) return;
+    try { w.toggleMaximize(); } catch (_) {}
+  });
+}
+
+/* 关闭确认：Rust 侧发现没记住选择时会发 vp://ask-close */
+let closeAsking = false;
+
+function openCloseModal(){
+  if (closeAsking) return;
+  closeAsking = true;
+  $('closeRemember').checked = false;
+  $('closeModal').classList.add('show');
+}
+
+function closeCloseModal(){
+  closeAsking = false;
+  $('closeModal').classList.remove('show');
+}
+
+/* 把当前选择同步给 Rust，下次点关闭就直接照做，不再问 */
+function pushCloseAction(){
+  if (!IS_DESKTOP || !HAS_TAURI) return;
+  try { invoke('set_close_action', { action: S.closeAction }); } catch (_) {}
+}
+
+async function resolveClose(action){
+  const remember = !!$('closeRemember').checked;
+  closeCloseModal();
+  if (remember){
+    S.closeAction = action;
+    savePrefs();
+  }
+  try { await invoke('resolve_close', { action: action, remember: remember }); } catch (_) {}
+}
+
+function closeText(a){
+  return a === 'quit' ? '直接退出' : a === 'tray' ? '后台播放' : '每次询问';
+}
+
+$('closeQuit').addEventListener('click', () => resolveClose('quit'));
+$('closeTray').addEventListener('click', () => resolveClose('tray'));
+$('closeCancel').addEventListener('click', () => closeCloseModal());
+$('closeModal').addEventListener('click', (e) => {
+  if (e.target === $('closeModal')) closeCloseModal();
+});
 
 /* ================= 事件接线 ================= */
 $('libBtn').addEventListener('click', () => library.toggle());
@@ -881,6 +982,12 @@ async function boot(){
     await listen('player://command', onCommandEvent);
   }
 
+  if (IS_DESKTOP){
+    wireTitlebar();
+    pushCloseAction();                       // 把"关闭时怎么处理"同步给壳子
+    listen('vp://ask-close', () => openCloseModal());
+  }
+
   watchPerf((p90) => {
     S.perfLow = true;
     document.body.classList.add('perf-low');
@@ -905,23 +1012,28 @@ async function boot(){
   if (IS_DESKTOP){
     logBoot('boot: desktop, folder=' + (S.folder || '-'));
     if (S.folder){
-      // 大曲库扫描要几秒，先给个占位，别让用户以为曲库丢了
-      showRestoring();
-      try {
-        const res = await rescan(S.folder);
+      // 直接进主界面，曲库在后台扫；扫完再把歌填进来。
+      // 以前会先弹"正在恢复曲库"挡一屏，目录大时要等好几秒，体感很差。
+      showLoading();
+      rescan(S.folder).then((res) => {
         if (res && res.tracks.length){
           setLibrary(res.tracks, false);
           $('empty').classList.remove('show');
           logBoot('boot: restored ' + res.tracks.length + ' tracks');
-          return;
+        } else {
+          logBoot('boot: rescan empty');
+          S.folder = '';
+          savePrefs();
+          showEmpty();
         }
-        logBoot('boot: rescan empty');
-      } catch (e){
+      }).catch((e) => {
         logBoot('boot: rescan failed ' + (e && e.message));
         // 目录不在了，清掉记忆，避免每次启动都白扫一遍
         S.folder = '';
         savePrefs();
-      }
+        showEmpty();
+      });
+      return;
     }
     showEmpty();
     logBoot('boot: empty state');
