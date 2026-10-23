@@ -42,7 +42,12 @@ body::after{
   position:relative;z-index:1;height:100vh;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
-  padding:clamp(18px,3.2vh,42px) clamp(20px,3.4vw,64px);
+  /* 安全区（状态栏 / 刘海 / 手势条）由原生推给 --safe-*，这里统一让开 */
+  padding:
+    calc(clamp(18px,3.2vh,42px) + var(--safe-t))
+    calc(clamp(20px,3.4vw,64px) + var(--safe-r))
+    calc(clamp(18px,3.2vh,42px) + var(--safe-b))
+    calc(clamp(20px,3.4vw,64px) + var(--safe-l));
 }
 @supports (height:100dvh){ .stage{height:100dvh} }
 

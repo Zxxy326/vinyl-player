@@ -14,10 +14,12 @@ export const S = {
   source: 'demo',     // 'demo' | 'library'
   scrubbing: false,
   perfLow: false,
-  folder: ''          // 桌面端上次的目录
+  folder: '',         // 桌面端上次的目录
+  keepOn: false,      // 安卓：保持屏幕常亮
+  hideBar: false      // 安卓：隐藏顶部状态栏
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [] };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false };
 
 export function loadPrefs(){
   try {
@@ -29,6 +31,8 @@ export function loadPrefs(){
   S.repeat = prefs.repeat === 'one' || prefs.repeat === 'off' ? prefs.repeat : 'all';
   S.view = prefs.view === 'visual' ? 'visual' : 'lyrics';
   S.folder = prefs.folder || '';
+  S.keepOn = !!prefs.keepOn;
+  S.hideBar = !!prefs.hideBar;
   return prefs;
 }
 
@@ -38,6 +42,8 @@ export function savePrefs(){
   prefs.repeat = S.repeat;
   prefs.view = S.view;
   prefs.folder = S.folder;
+  prefs.keepOn = !!S.keepOn;
+  prefs.hideBar = !!S.hideBar;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }
 
@@ -106,4 +112,41 @@ export function removeFromPlaylist(id, trackId){
   if (!p) return;
   p.ids = p.ids.filter(x => x !== trackId);
   savePrefs();
+}
+
+/* ---------------- 收藏：固定一个「收藏」歌单 ---------------- */
+const FAV_ID = 'pl:fav';
+
+function ensureFav(){
+  const list = normPlaylists();
+  let p = list.find(x => x.id === FAV_ID);
+  if (!p){
+    p = { id: FAV_ID, name: '收藏', ids: [], at: Date.now() };
+    list.unshift(p);
+    savePrefs();
+  }
+  return p;
+}
+
+/** 首次启动就把「收藏」歌单建出来，歌单页里始终能看到它 */
+export function ensureFavorites(){
+  ensureFav();
+}
+
+export function isFavorite(trackId){
+  if (!trackId) return false;
+  const p = normPlaylists().find(x => x.id === FAV_ID);
+  return !!(p && p.ids.indexOf(trackId) >= 0);
+}
+
+/** 返回 true 表示操作后处于「已收藏」 */
+export function toggleFavorite(trackId){
+  if (!trackId) return false;
+  const p = ensureFav();
+  const i = p.ids.indexOf(trackId);
+  if (i >= 0) p.ids.splice(i, 1);
+  else p.ids.push(trackId);
+  p.at = Date.now();
+  savePrefs();
+  return i < 0;
 }

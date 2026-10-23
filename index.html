@@ -52,7 +52,12 @@ body::after{
   position:relative;z-index:1;height:100vh;
   display:grid;grid-template-columns:1.02fr .98fr;
   grid-template-rows:minmax(0,1fr);
-  padding:clamp(18px,3.2vh,42px) clamp(20px,3.4vw,64px);
+  /* 安全区（状态栏 / 刘海 / 手势条）由原生推给 --safe-*，这里统一让开 */
+  padding:
+    calc(clamp(18px,3.2vh,42px) + var(--safe-t))
+    calc(clamp(20px,3.4vw,64px) + var(--safe-r))
+    calc(clamp(18px,3.2vh,42px) + var(--safe-b))
+    calc(clamp(20px,3.4vw,64px) + var(--safe-l));
 }
 @supports (height:100dvh){ .stage{height:100dvh} }
 
@@ -279,6 +284,28 @@ body.perf-low .gloss{display:none}
   letter-spacing:.005em;margin-top:14px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+/* 标题行：标题占满，收藏按钮靠右，两者垂直居中对齐 */
+.ttl-row{display:flex;align-items:center;gap:14px;margin-top:14px}
+.ttl-row .title{margin-top:0;flex:1 1 auto;min-width:0}
+.fav{
+  flex:0 0 auto;margin-left:auto;
+  width:40px;height:40px;border-radius:50%;
+  display:grid;place-items:center;padding:0;
+  border:1px solid rgba(246,234,217,.26);
+  background:rgba(20,6,8,.22);
+  color:rgba(246,234,217,.72);
+  cursor:pointer;
+  transition:color .25s var(--ease), border-color .25s var(--ease),
+             background .25s var(--ease), transform .2s var(--ease);
+}
+.fav svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
+.fav:hover{transform:scale(1.06);color:var(--cream)}
+.fav.on{
+  color:#ff8a95;border-color:rgba(255,138,149,.55);
+  background:rgba(255,138,149,.12);
+}
+.fav.on svg{fill:currentColor}
+.fav[disabled]{opacity:.35;cursor:default;transform:none}
 .artist{
   margin-top:10px;font-size:clamp(11px,1.05vw,13px);
   letter-spacing:.08em;color:rgba(246,234,217,.66);
@@ -652,6 +679,9 @@ body.view-visual .visual{display:flex}
     top:0;right:0;bottom:0;width:min(420px,42vw);
     transform:translateX(102%);
     border-left:1px solid rgba(246,234,217,.12);
+    /* 横屏时状态栏盖在抽屉上，头部要自己让开 */
+    padding-top:var(--safe-t);
+    padding-bottom:var(--safe-b);
   }
   .sheet.open{transform:none}
 }
@@ -663,10 +693,15 @@ body.view-visual .visual{display:flex}
     grid-template-columns:1fr;
     grid-template-rows:auto minmax(0,1fr);
     gap:0;
-    padding:calc(var(--safe-t) + 14px) 20px calc(var(--safe-b) + 10px);
+    padding:
+      calc(var(--safe-t) + 14px)
+      calc(var(--safe-r) + 20px)
+      calc(var(--safe-b) + 10px)
+      calc(var(--safe-l) + 20px);
   }
-  /* 唱片居中：左右留白必须对称，之前给右侧留了 24px 让唱臂，结果重心偏左 */
-  .deck{--disc:min(38vh,72vw);padding-top:6px}
+  /* 唱片居中：左右留白必须对称，之前给右侧留了 24px 让唱臂，结果重心偏左
+     顶部留一段气口，让唱盘落在屏幕上半区的中间（对齐用户那版竖屏稿） */
+  .deck{--disc:min(38vh,72vw);padding-top:clamp(10px,7vh,60px)}
   .tonearm{transform:scale(.96);transform-origin:50% 50%}
   .panel{
     border-left:0;padding-left:0;
@@ -684,9 +719,20 @@ body.view-visual .visual{display:flex}
   .controls{margin-top:8px;padding-top:10px}
   .row{margin-top:10px;gap:10px}
   .btns{gap:clamp(14px,4.4vw,22px)}
-  .hw.tl,.hw.bl,.hw.bc{display:none}
-  .hw.br{right:24px;bottom:10px;gap:6px}
-  .hw.br .knob{width:24px}
+  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上
+     电平表贴左边、两颗旋钮贴右边，底部基本与唱片下沿齐平 */
+  .hw.tl,.hw.bc{display:none}
+  .hw.bl{
+    display:flex;left:0;bottom:5%;
+    flex-direction:column;align-items:flex-start;gap:6px;
+  }
+  .hw.bl .eq{height:15px}
+  .hw.bl .tag{font-size:7.5px;letter-spacing:.22em;line-height:1.4}
+  .hw.br{
+    display:flex;right:0;bottom:1%;left:auto;
+    flex-direction:row;align-items:center;gap:6px;
+  }
+  .hw.br .knob{width:26px}
   /* 竖屏只隐藏指示灯；两个旋钮都保留（之前的写法把音量旋钮也一起藏了，看着像少了一个按钮） */
   .hw.br .led{display:none}
   .rpm{display:none}
@@ -702,7 +748,8 @@ body.view-visual .visual{display:flex}
   .sheet-head{padding:14px 16px 10px}
   .sheet-tools{padding:10px 14px 12px}
   .lib-list{padding-bottom:calc(18px + var(--safe-b))}
-  .toast{bottom:calc(24px + var(--safe-b))}
+  /* 提示条要抬到传输键上方，否则正好压住播放键 */
+  .toast{bottom:calc(88px + var(--safe-b))}
 }
 
 /* 超窄竖屏（小屏手机）再收一档 */
@@ -717,7 +764,13 @@ body.view-visual .visual{display:flex}
 
 /* 横屏手机（高度很小）：压扁但不换版式 */
 @media (orientation:landscape) and (max-height:520px){
-  .stage{padding:10px 18px}
+  .stage{
+    padding:
+      calc(var(--safe-t) + 10px)
+      calc(var(--safe-r) + 18px)
+      calc(var(--safe-b) + 10px)
+      calc(var(--safe-l) + 18px);
+  }
   .deck{--disc:min(78vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
@@ -802,6 +855,12 @@ body.perf-low .empty{backdrop-filter:none}
 }
 .grp.is-cur .grp .tr-body{display:flex;flex-direction:column;min-width:0}
 .grp-ico{background:rgba(217,43,57,.3);border-color:rgba(217,43,57,.5);color:#fff}
+/* 「收藏」是固定歌单：红底上换成粉色心形，跟普通歌单区分开 */
+.grp-ico.is-fav{
+  background:rgba(255,138,149,.18);
+  border-color:rgba(255,138,149,.42);
+  color:#ff8a95;font-size:14px;
+}
 .grp-arrow{
   flex:none;font-size:12px;line-height:1;white-space:nowrap;
   color:rgba(246,234,217,.32);padding-left:2px;
@@ -891,6 +950,37 @@ body.perf-low .empty{backdrop-filter:none}
 }
 .set-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .set-note{margin:10px 0 0;font-size:10px;line-height:1.6;color:rgba(246,234,217,.3)}
+
+/* 开关行：整行可点，右边一颗滑动开关 */
+.set-switch{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:9px 2px;border:0;border-bottom:1px solid rgba(246,234,217,.05);
+  background:none;font:inherit;text-align:left;cursor:pointer;
+  color:rgba(246,234,217,.82);-webkit-tap-highlight-color:transparent;
+}
+.set-switch:last-child{border-bottom:0}
+.sw-txt{flex:1;min-width:0;display:block;font-size:11px;line-height:1.35}
+.sw-txt b{display:block;font-weight:400;color:rgba(246,234,217,.86)}
+.sw-txt em{
+  display:block;margin-top:2px;font-style:normal;
+  font-size:9.5px;color:rgba(246,234,217,.32);letter-spacing:.02em;
+}
+.sw-track{
+  flex:none;width:34px;height:19px;border-radius:100px;
+  background:rgba(246,234,217,.12);
+  box-shadow:inset 0 0 0 1px rgba(246,234,217,.14);
+  position:relative;transition:background .25s var(--ease), box-shadow .25s var(--ease);
+}
+.sw-track i{
+  position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;
+  background:rgba(246,234,217,.75);transition:transform .25s var(--ease), background .25s;
+}
+.set-switch[aria-pressed="true"] .sw-track{
+  background:rgba(255,138,149,.42);
+  box-shadow:inset 0 0 0 1px rgba(255,138,149,.6);
+}
+.set-switch[aria-pressed="true"] .sw-track i{transform:translateX(15px);background:#fff4ea}
+.set-switch:active .sw-track i{width:17px}
 .lib-empty.small{padding:10px 12px;font-size:11px}
 
 /* 竖屏抽屉：页签横向可滚 */
@@ -1031,7 +1121,12 @@ body.perf-low .empty{backdrop-filter:none}
   <!-- ================= 右：歌词 / 频谱 ================= -->
   <div class="panel">
     <div class="eyebrow"><i class="rule"></i><span id="tEyebrow">SIDE A · TRACK 01</span></div>
-    <h1 class="title" id="tTitle">Signal to Noise</h1>
+    <div class="ttl-row">
+      <h1 class="title" id="tTitle">Signal to Noise</h1>
+      <button class="fav" id="fav" aria-label="收藏" title="收藏到「收藏」歌单" aria-pressed="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3l-1.1-1C6.1 15 3 12.2 3 8.7 3 6.1 5.1 4 7.7 4c1.5 0 2.9.7 3.8 1.8l.5.6.5-.6C13.4 4.7 14.8 4 16.3 4 18.9 4 21 6.1 21 8.7c0 3.5-3.1 6.3-7.9 10.6z"/></svg>
+      </button>
+    </div>
     <div class="artist" id="tArtist">Scott Buckley <em>— Cinematic Ambient, 2020</em></div>
     <div class="credit" id="tCredit">Music · Scott Buckley · <a href="https://www.scottbuckley.com.au/library/signal-to-noise/" target="_blank" rel="noopener">CC BY 4.0</a></div>
 
@@ -1246,10 +1341,12 @@ const S = {
   source: 'demo',     // 'demo' | 'library'
   scrubbing: false,
   perfLow: false,
-  folder: ''          // 桌面端上次的目录
+  folder: '',         // 桌面端上次的目录
+  keepOn: false,      // 安卓：保持屏幕常亮
+  hideBar: false      // 安卓：隐藏顶部状态栏
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [] };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false };
 
 function loadPrefs(){
   try {
@@ -1261,6 +1358,8 @@ function loadPrefs(){
   S.repeat = prefs.repeat === 'one' || prefs.repeat === 'off' ? prefs.repeat : 'all';
   S.view = prefs.view === 'visual' ? 'visual' : 'lyrics';
   S.folder = prefs.folder || '';
+  S.keepOn = !!prefs.keepOn;
+  S.hideBar = !!prefs.hideBar;
   return prefs;
 }
 
@@ -1270,6 +1369,8 @@ function savePrefs(){
   prefs.repeat = S.repeat;
   prefs.view = S.view;
   prefs.folder = S.folder;
+  prefs.keepOn = !!S.keepOn;
+  prefs.hideBar = !!S.hideBar;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }
 
@@ -1338,6 +1439,43 @@ function removeFromPlaylist(id, trackId){
   if (!p) return;
   p.ids = p.ids.filter(x => x !== trackId);
   savePrefs();
+}
+
+/* ---------------- 收藏：固定一个「收藏」歌单 ---------------- */
+const FAV_ID = 'pl:fav';
+
+function ensureFav(){
+  const list = normPlaylists();
+  let p = list.find(x => x.id === FAV_ID);
+  if (!p){
+    p = { id: FAV_ID, name: '收藏', ids: [], at: Date.now() };
+    list.unshift(p);
+    savePrefs();
+  }
+  return p;
+}
+
+/** 首次启动就把「收藏」歌单建出来，歌单页里始终能看到它 */
+function ensureFavorites(){
+  ensureFav();
+}
+
+function isFavorite(trackId){
+  if (!trackId) return false;
+  const p = normPlaylists().find(x => x.id === FAV_ID);
+  return !!(p && p.ids.indexOf(trackId) >= 0);
+}
+
+/** 返回 true 表示操作后处于「已收藏」 */
+function toggleFavorite(trackId){
+  if (!trackId) return false;
+  const p = ensureFav();
+  const i = p.ids.indexOf(trackId);
+  if (i >= 0) p.ids.splice(i, 1);
+  else p.ids.push(trackId);
+  p.at = Date.now();
+  savePrefs();
+  return i < 0;
 }
 
 /* ---- core/bridge.js ---- */
@@ -2360,6 +2498,12 @@ function restoreImportedLyrics(track){
   return track;
 }
 
+/* 当前歌词行推给原生（通知栏 / 锁屏副标题）。只有安卓原生壳有这条路。 */
+function setNowLyric(text){
+  if (!IS_ANDROID || !HAS_ANDROID) return;
+  try { acall('lyric', { text: text || '' }); } catch (_) {}
+}
+
 async function loadCover(track){
   if (track.artUrl) return track.artUrl;
   try {
@@ -2369,8 +2513,17 @@ async function loadCover(track){
     } else if (IS_ANDROID){
       // 安卓：原生侧先掏内嵌图片，没有再退回专辑封面
       const args = { albumId: track.albumId == null ? '' : String(track.albumId), uri: track.uri || '' };
-      const b64 = HAS_ANDROID ? acall('cover', args) : await pinvoke('cover', args);
-      if (b64) return 'data:image/jpeg;base64,' + b64;
+      const raw = HAS_ANDROID ? acall('cover', args) : await pinvoke('cover', args);
+      if (raw){
+        // 安卓返回 {mime, data}：MIME 必须照抄，封面可能是 PNG / WebP
+        if (typeof raw === 'string' && raw.charAt(0) === '{'){
+          try {
+            const o = JSON.parse(raw);
+            if (o && o.data) return 'data:' + (o.mime || 'image/jpeg') + ';base64,' + o.data;
+          } catch (_) {}
+        }
+        return 'data:image/jpeg;base64,' + raw;
+      }
     }
   } catch (_) {}
   return '';
@@ -2565,6 +2718,11 @@ class LyricsView {
       el.classList.toggle('is-active', k === i);
     });
     this.center();
+    // 把当前这句推给原生（通知栏/锁屏显示正在唱哪一句）
+    if (typeof this.onLine === 'function'){
+      const l = this.lines[i];
+      this.onLine(l ? (l.en || l.cn || '') : '');
+    }
   }
 
   center(){
@@ -2847,6 +3005,10 @@ class Library {
     this.playlists = [];
     this.libraryInfo = {};
     this.query = '';
+    this.view = 'lyrics';
+    this.volume = .72;
+    this.keepOn = false;
+    this.hideBar = false;
 
     this.searchInput = o.searchInput || null;
     this.searchClear = o.searchClear || null;
@@ -2982,6 +3144,8 @@ class Library {
     if (this.opts.libraryInfo) this.libraryInfo = this.opts.libraryInfo;
     if (this.opts.view) this.view = this.opts.view;
     if (this.opts.volume != null) this.volume = this.opts.volume;
+    if (this.opts.keepOn != null) this.keepOn = !!this.opts.keepOn;
+    if (this.opts.hideBar != null) this.hideBar = !!this.opts.hideBar;
 
     if (this.lrcBtn) this.lrcBtn.hidden = !this.opts.showLrcImport;
     this.count.textContent = this.tracks.length ? this.tracks.length + ' 首' : '';
@@ -3147,6 +3311,7 @@ class Library {
     const active = this.drill && this.drill.kind === 'playlist' ? this.drill.key : '';
     const html = this.playlists.map((p) => {
       const on = active === p.id;
+      const isFav = p.id === 'pl:fav';   // 「收藏」是固定歌单，图标用心形、不给删
       const secs = p.ids.reduce((s, id) => {
         const t = this.tracks.find(x => x.id === id);
         return s + (t ? (t.duration || 0) : 0);
@@ -3155,7 +3320,7 @@ class Library {
         ? '<div class="grp-body">' + this.playlistTracks(p) + '</div>'
         : '';
       return '<div class="grp' + (on ? ' is-cur' : '') + '" data-pl="' + p.id + '">' +
-        '<span class="grp-ico">♪</span>' +
+        '<span class="grp-ico' + (isFav ? ' is-fav' : '') + '">' + (isFav ? '♥' : '♪') + '</span>' +
         '<span class="tr-body">' +
           '<span class="tr-t">' + esc(p.name) + '</span>' +
           '<span class="tr-a">' + p.ids.length + ' 首 · ' + fmtDuration(secs) + '</span>' +
@@ -3166,7 +3331,7 @@ class Library {
 
     const cur = this.drill && this.drill.kind === 'playlist'
       ? this.playlists.find(p => p.id === this.drill.key) : null;
-    const actions = cur
+    const actions = cur && cur.id !== 'pl:fav'
       ? '<div class="pl-actions">' +
           '<button class="tool danger" data-act="delete">删除这个歌单</button>' +
         '</div>'
@@ -3265,6 +3430,21 @@ class Library {
         '</div>'
       : '';
 
+    const sw = (key, on, title, desc) =>
+      '<button class="set-switch" data-set="' + key + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="sw-txt"><b>' + title + '</b><em>' + desc + '</em></span>' +
+        '<span class="sw-track"><i></i></span>' +
+      '</button>';
+
+    const screenGroup = platform === 'android'
+      ? '<div class="set-group">' +
+          '<h3>屏幕</h3>' +
+          sw('keep-on', this.keepOn, '保持屏幕常亮', '放唱片的时候不让屏幕自动熄灭') +
+          sw('hide-bar', this.hideBar, '隐藏顶部状态栏', '时间、电量那一行收起，封面更满') +
+          '<p class="set-note">隐藏状态栏后，从屏幕顶部下滑可以临时叫回来。</p>' +
+        '</div>'
+      : '';
+
     this.lists.settings.innerHTML =
       '<div class="set-group">' +
         '<h3>音乐库</h3>' +
@@ -3305,6 +3485,8 @@ class Library {
       '</div>' +
 
       notifGroup +
+
+      screenGroup +
 
       '<div class="set-group">' +
         '<h3>关于</h3>' +
@@ -3396,6 +3578,8 @@ const lyricsView = new LyricsView({
   track: $('lyricTrack'),
   onSeek: (t) => seekTo(t, true)
 });
+// 当前歌词行同步给原生：通知栏 / 锁屏上显示正在唱哪一句
+lyricsView.onLine = (text) => setNowLyric(text);
 
 const spectrum = new Spectrum({ canvas: $('viz'), backend });
 
@@ -3450,6 +3634,12 @@ const library = new Library({
 
 /* 通知权限：没有它通知栏不会出媒体卡片，设置页要能提示并一键跳转 */
 let notifOk = true;
+
+/* 调试用：?platform=android 强制按安卓渲染设置页 */
+const DEBUG_PLATFORM = (() => {
+  try { return new URLSearchParams(location.search).get('platform') || ''; } catch (_) { return ''; }
+})();
+
 function refreshNotifState(){
   if (!IS_ANDROID || !HAS_ANDROID) return notifOk;
   try {
@@ -3466,12 +3656,15 @@ function renderLib(extra){
     showLrcImport: IS_ANDROID,
     playlists: getPlaylists(),
     libraryInfo: {
-      platform: IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web',
+      // ?platform=android 可以在桌面浏览器里预览安卓专属的设置项（截图/调试用）
+      platform: DEBUG_PLATFORM || (IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web'),
       folder: S.folder || '',
       notifOk: notifOk
     },
     view: S.view,
-    volume: S.volume
+    volume: S.volume,
+    keepOn: S.keepOn,
+    hideBar: S.hideBar
   }, extra || {});
   library.render(S.tracks, S.index, S.playing, opts);
 }
@@ -3522,6 +3715,17 @@ function currentTrack(){
   return S.index >= 0 ? S.tracks[S.index] : null;
 }
 
+/* 收藏：一颗心，点了就进固定的「收藏」歌单，再点移出 */
+const favBtn = $('fav');
+
+function paintFav(tr){
+  const on = !!tr && isFavorite(tr.id);
+  favBtn.classList.toggle('on', on);
+  favBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  favBtn.disabled = !tr;
+  favBtn.title = on ? '已收藏 · 再点取消' : '收藏到「收藏」歌单';
+}
+
 function paintMeta(tr){
   const pad = String(S.index + 1).padStart(2, '0');
   $('tEyebrow').textContent = tr.eyebrow || ('SIDE A · TRACK ' + pad);
@@ -3534,6 +3738,7 @@ function paintMeta(tr){
     (String(tr.title || '').toUpperCase().replace(/[^A-Z0-9\u4e00-\u9fff ]/g, ' ') + ' · ').repeat(3);
   $('rpmLabel').textContent = (tr.format ? tr.format + ' · ' : '') + 'STEREO';
   document.title = (tr.title || 'Vinyl Player') + (tr.artist ? ' — ' + tr.artist : '') + ' · Vinyl Player';
+  paintFav(tr);
 }
 
 async function paintCover(tr){
@@ -3933,6 +4138,23 @@ function doPlaylistAction(act, id){
 }
 
 /* ================= 设置 ================= */
+
+/* 屏幕相关设置要落到原生窗口上，Web 端没有这两件事 */
+function applyScreenPrefs(){
+  if (!IS_ANDROID || !HAS_ANDROID) return;
+  try { acall('keepScreenOn', { on: !!S.keepOn }); } catch (_) {}
+  try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+}
+
+/* 设置页自己缓存了一份状态，改完要同步过去再重绘，否则界面还显示旧值 */
+function refreshSettings(){
+  library.view = S.view;
+  library.volume = S.volume;
+  library.keepOn = S.keepOn;
+  library.hideBar = S.hideBar;
+  library.renderSettings();
+}
+
 function doSetting(key){
   if (key === 'reset-stats'){
     resetStats();
@@ -3943,8 +4165,20 @@ function doSetting(key){
     S.view = S.view === 'visual' ? 'lyrics' : 'visual';
     savePrefs();
     applyView();
-    library.renderSettings();
+    refreshSettings();
     toast('默认视图：' + (S.view === 'visual' ? '频谱' : '歌词'));
+  } else if (key === 'keep-on'){
+    S.keepOn = !S.keepOn;
+    savePrefs();
+    applyScreenPrefs();
+    refreshSettings();
+    toast(S.keepOn ? '屏幕常亮 · 已开启' : '屏幕常亮 · 已关闭');
+  } else if (key === 'hide-bar'){
+    S.hideBar = !S.hideBar;
+    savePrefs();
+    applyScreenPrefs();
+    refreshSettings();
+    toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
   } else if (key === 'notif'){
     if (HAS_ANDROID) acall('openNotifSettings');
   }
@@ -4025,6 +4259,16 @@ $('emptyDemo').addEventListener('click', () => {
 });
 $('prev').addEventListener('click', () => goPrev());
 $('next').addEventListener('click', () => goNext());
+
+/* 心形按钮：收藏 / 取消收藏 */
+favBtn.addEventListener('click', () => {
+  const tr = currentTrack();
+  if (!tr) return;
+  const on = toggleFavorite(tr.id);
+  paintFav(tr);
+  refreshPlaylists();
+  toast(on ? ('已收藏「' + (tr.title || '这首') + '」') : '已取消收藏');
+});
 
 /* 加入歌单选择层 */
 $('plPickCancel').addEventListener('click', () => { $('plPick').hidden = true; });
@@ -4112,6 +4356,18 @@ function onCommandEvent(c){
   else if (cmd === 'play'){ setPlaying(true); }
 }
 
+/* 原生把安全区推过来（单位已经是 CSS 像素）。
+   WebView 不解 env(safe-area-inset-*)，只能由壳子算好塞进 CSS 变量：
+   状态栏 / 手势条底下要留白，但背景仍然铺满整屏，做到"内容让开、底色不留缝"。 */
+window.__setInsets = (t, b, l, r) => {
+  const s = document.documentElement.style;
+  s.setProperty('--safe-t', (t || 0) + 'px');
+  s.setProperty('--safe-b', (b || 0) + 'px');
+  s.setProperty('--safe-l', (l || 0) + 'px');
+  s.setProperty('--safe-r', (r || 0) + 'px');
+  document.body.classList.add('has-insets');
+};
+
 /* 安卓壳通过 evaluateJavascript 调这里 */
 window.__playerEvent = (name, payload) => {
   if (name === 'position') onPositionEvent(payload);
@@ -4146,6 +4402,8 @@ window.__rescan = async () => {
 /* ================= 启动 ================= */
 async function boot(){
   loadPrefs();
+  ensureFavorites();   // 「收藏」歌单先建出来，歌单页里始终在
+  paintFav(currentTrack());
   // ?view=visual / ?view=lyrics 强制指定视图，调试和无头截图用
   try {
     const v = new URLSearchParams(location.search).get('view');
@@ -4168,6 +4426,7 @@ async function boot(){
   transport.setShuffle(S.shuffle);
   transport.setRepeat(S.repeat);
   backend.setVolume(S.volume);
+  applyScreenPrefs();   // 常亮 / 隐藏状态栏：开机就按上次的选择恢复
 
   if (IS_ANDROID){
     await listen('player://position', onPositionEvent);

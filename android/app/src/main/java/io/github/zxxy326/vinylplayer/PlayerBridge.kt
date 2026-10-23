@@ -208,12 +208,30 @@ class PlayerBridge(private val act: MainActivity) {
                         ).toString()
                         val name = c.getString(iName) ?: ""
                         val ext = name.substringAfterLast('.', "").uppercase()
+                        // MediaStore 对没写标签的文件会返回 "<unknown>"，别让它进到界面和通知里
+                        val rawArtist = c.getString(iArtist) ?: ""
+                        val rawAlbum = c.getString(iAlbum) ?: ""
+                        val rawTitle = c.getString(iTitle) ?: name.substringBeforeLast('.')
+
+                        // 很多中文曲库的文件名就是「艺人-曲名.wav」，而标签里 artist 是空的。
+                        // 通知卡片第二行读的就是 MediaSession 的 artist，空着会很难看，
+                        // 所以这里用文件名兜一下（只在 artist 缺失时生效）。
+                        var title = rawTitle
+                        var artist = if (isUnknown(rawArtist)) "" else rawArtist
+                        if (artist.isEmpty()) {
+                            val stem = name.substringBeforeLast('.')
+                            val cut = stem.indexOf('-')
+                            if (cut > 0 && cut < stem.length - 1) {
+                                artist = stem.substring(0, cut).trim()
+                                title = stem.substring(cut + 1).trim().ifEmpty { title }
+                            }
+                        }
 
                         val o = JSONObject()
                         o.put("uri", uri)
-                        o.put("title", c.getString(iTitle) ?: name.substringBeforeLast('.'))
-                        o.put("artist", c.getString(iArtist) ?: "未知艺人")
-                        o.put("album", c.getString(iAlbum) ?: "")
+                        o.put("title", title)
+                        o.put("artist", artist)
+                        o.put("album", if (isUnknown(rawAlbum)) "" else rawAlbum)
                         o.put("albumId", c.getLong(iAlbumId))
                         o.put("duration", c.getLong(iDur) / 1000.0)
                         o.put("format", if (ext.isEmpty()) "AUDIO" else ext)
@@ -283,8 +301,14 @@ class PlayerBridge(private val act: MainActivity) {
     }
 
     /**
-     * 封面：优先取音频文件里的内嵌图片（FLAC picture block / ID3 APIC / MP4 covr），
-     * 取不到再退回 MediaStore 的专辑封面。返回 Base64，空串表示没有。
+     * 封面：返回 {"mime":"image/jpeg","data":"<base64>"}，空串表示没有。
+     *
+     * 顺序是有讲究的：
+     *  1. 自己解容器标签 —— WAV 的封面在尾部 `id3 ` 块的 APIC 里，系统的
+     *     MediaMetadataRetriever 根本不看这个块，所以必须自己来；
+     *  2. MMR —— 兜住 OGG / WMA 这类我们没写解析器的容器；
+     *  3. loadThumbnail —— 媒体库里已经有封面索引时最快；
+     *  4. albumart URI —— 只有 Android 9 及以下还存在，10+ 已废弃，仅作最后兜底。
      */
     @JavascriptInterface
     fun cover(json: String): String {
@@ -292,24 +316,43 @@ class PlayerBridge(private val act: MainActivity) {
         val uriStr = o.optString("uri", "")
         val albumId = o.optString("albumId", "")
 
-        // 1. 内嵌（最可靠：手机里大量歌曲没有专辑封面索引，但文件里有）
         if (uriStr.isNotEmpty()) {
+            val uri = Uri.parse(uriStr)
+
+            try {
+                Tags.coverOf(act.contentResolver, uri)?.let { return artJson(it.mime, it.bytes) }
+            } catch (_: Throwable) {
+            }
+
             try {
                 val mmr = android.media.MediaMetadataRetriever()
                 try {
-                    mmr.setDataSource(act, Uri.parse(uriStr))
+                    mmr.setDataSource(act, uri)
                     val pic = mmr.embeddedPicture
                     if (pic != null && pic.size in 1..(12 * 1024 * 1024)) {
-                        return Base64.encodeToString(pic, Base64.NO_WRAP)
+                        return artJson(sniffMime(pic), pic)
                     }
                 } finally {
                     try { mmr.release() } catch (_: Throwable) {}
                 }
             } catch (_: Throwable) {
             }
+
+            if (Build.VERSION.SDK_INT >= 29) {
+                try {
+                    val bmp = act.contentResolver.loadThumbnail(
+                        uri, android.util.Size(512, 512), null
+                    )
+                    val bos = java.io.ByteArrayOutputStream()
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, bos)
+                    bmp.recycle()
+                    return artJson("image/jpeg", bos.toByteArray())
+                } catch (_: Throwable) {
+                }
+            }
         }
 
-        // 2. 退回专辑封面
+        // 4. 老式专辑封面（Android 9 及以下）
         if (albumId.isEmpty()) return ""
         return try {
             val uri = ContentUris.withAppendedId(
@@ -318,12 +361,24 @@ class PlayerBridge(private val act: MainActivity) {
             )
             act.contentResolver.openInputStream(uri)?.use { input ->
                 val bytes = input.readBytes()
-                if (bytes.size > 8 * 1024 * 1024) ""
-                else Base64.encodeToString(bytes, Base64.NO_WRAP)
+                if (bytes.size > 8 * 1024 * 1024) "" else artJson(sniffMime(bytes), bytes)
             } ?: ""
         } catch (_: Exception) {
             ""
         }
+    }
+
+    private fun artJson(mime: String, bytes: ByteArray): String =
+        JSONObject()
+            .put("mime", mime)
+            .put("data", Base64.encodeToString(bytes, Base64.NO_WRAP))
+            .toString()
+
+    private fun sniffMime(b: ByteArray): String = when {
+        b.size >= 3 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() -> "image/jpeg"
+        b.size >= 8 && b[0] == 0x89.toByte() && b[1] == 'P'.code.toByte() -> "image/png"
+        b.size >= 12 && b[0] == 'R'.code.toByte() && b[8] == 'W'.code.toByte() -> "image/webp"
+        else -> "image/jpeg"
     }
 
     /**
@@ -349,6 +404,17 @@ class PlayerBridge(private val act: MainActivity) {
     @JavascriptInterface
     fun pickLyrics() {
         act.pickLyrics()
+    }
+
+    /**
+     * 当前高亮的那句歌词。前端在歌词行切换时推过来，通知栏拿它当副标题，
+     * 锁屏和胶囊卡片上也能看到正在唱哪一句。
+     */
+    @JavascriptInterface
+    fun lyric(json: String): String {
+        val t = JSONObject(json).optString("text", "")
+        PlaybackService.setLyric(t)
+        return "{}"
     }
 
     /** 通知权限状态：没有它，通知栏/锁屏不会有媒体卡片 */
@@ -389,11 +455,40 @@ class PlayerBridge(private val act: MainActivity) {
         return "{}"
     }
 
+    /** 设置项：保持屏幕常亮（看唱片转的时候屏幕别熄） */
+    @JavascriptInterface
+    fun keepScreenOn(json: String): String {
+        val on = try {
+            JSONObject(json).optBoolean("on", false)
+        } catch (_: Throwable) {
+            false
+        }
+        act.setKeepScreenOn(on)
+        return "{}"
+    }
+
+    /** 设置项：隐藏顶部状态栏（沉浸） */
+    @JavascriptInterface
+    fun hideStatusBar(json: String): String {
+        val on = try {
+            JSONObject(json).optBoolean("on", false)
+        } catch (_: Throwable) {
+            false
+        }
+        act.setHideStatusBar(on)
+        return "{}"
+    }
+
     private fun hasAudioPermission(): Boolean {
         val perm = if (android.os.Build.VERSION.SDK_INT >= 33)
             Manifest.permission.READ_MEDIA_AUDIO
         else
             Manifest.permission.READ_EXTERNAL_STORAGE
         return ContextCompat.checkSelfPermission(act, perm) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isUnknown(s: String): Boolean {
+        val t = s.trim()
+        return t.isEmpty() || t.equals("<unknown>", true) || t.equals("unknown", true)
     }
 }

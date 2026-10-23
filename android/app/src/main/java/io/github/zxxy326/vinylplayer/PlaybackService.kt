@@ -45,6 +45,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         val p = PlayerHolder.ensure(this)
 
         createChannel()
@@ -86,6 +87,9 @@ class PlaybackService : MediaSessionService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val id = mediaItem?.mediaId ?: ""
+                currentLyric = ""          // 换歌了，上一首的歌词不能留在通知上
+                lastArtUri = null
+                lastArt = null
                 JsBridge.emit(
                     "track",
                     "{\"index\":${p.currentMediaItemIndex},\"id\":\"$id\"}"
@@ -148,17 +152,21 @@ class PlaybackService : MediaSessionService() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
 
+        // 有当前歌词行就顶到副标题上，没有就退回艺人
+        val lyric = currentLyric.takeIf { it.isNotBlank() }
+
         b.setSmallIcon(R.drawable.ic_stat_vinyl)
             .setContentTitle(title)
-            .setContentText(artist)
+            .setContentText(lyric ?: artist)
             .setContentIntent(openIntent)
             .setDeleteIntent(serviceIntent(ACTION_CLOSE))
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setOngoing(playing)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
+        if (lyric != null) b.setSubText(artist)
 
-        loadArt(md)?.let { b.setLargeIcon(it) }
+        loadArt(p)?.let { b.setLargeIcon(it) }
 
         // 紧凑视图必须显式给出三个按钮的下标，否则系统只塞「播放/暂停」
         b.setActions(
@@ -187,27 +195,42 @@ class PlaybackService : MediaSessionService() {
             serviceIntent(act)
         ).build()
 
-    /** 通知大图：优先媒体自带的 artworkUri（系统相册缩略图），失败就不放图 */
-    private fun loadArt(md: MediaMetadata): Bitmap? {
-        val uri = md.artworkUri ?: return null
+    /**
+     * 通知大图：直接从音频文件的容器标签里取（和界面用的是同一套解析器）。
+     * 之前走的是 MediaMetadata 里的 artworkUri，那是
+     * content://media/external/audio/albumart/<id> —— Android 10 起已经废弃，
+     * openInputStream 直接抛异常，所以通知上一直没有封面。
+     */
+    private fun loadArt(p: Player): Bitmap? {
+        val uri = p.currentMediaItem?.localConfiguration?.uri ?: return null
         val key = uri.toString()
         if (key == lastArtUri) return lastArt
         lastArtUri = key
         lastArt = try {
-            contentResolver.openInputStream(uri)?.use { ins ->
-                val opts = BitmapFactory.Options().apply { inSampleSize = 2 }
-                BitmapFactory.decodeStream(ins, null, opts)
-            }
+            Tags.coverOf(contentResolver, uri)?.let { decodeSampled(it.bytes) }
         } catch (_: Throwable) {
             null
         }
         return lastArt
     }
 
+    /** 通知里的图最大也就 512px，先量尺寸再按 2 的幂降采样，避免 600KB 的图全量解码 */
+    private fun decodeSampled(bytes: ByteArray): Bitmap? {
+        val probe = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, probe)
+        var sample = 1
+        val longest = maxOf(probe.outWidth, probe.outHeight)
+        while (longest / sample > 512) sample *= 2
+        return BitmapFactory.decodeByteArray(
+            bytes, 0, bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sample }
+        )
+    }
+
     private fun refresh(force: Boolean = false) {
         val p = PlayerHolder.peek() ?: return
         val md = p.mediaMetadata
-        val key = "${md.title}|${md.artist}|${md.artworkUri}|${p.isPlaying}|${p.currentMediaItemIndex}"
+        val key = "${md.title}|${md.artist}|${p.isPlaying}|${p.currentMediaItemIndex}|$currentLyric"
         if (!force && key == lastKey) return
         lastKey = key
 
@@ -272,6 +295,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         ticker?.let { handler.removeCallbacks(it) }
         PlayerHolder.tap?.onBins = null
         session?.release()
@@ -287,5 +311,27 @@ class PlaybackService : MediaSessionService() {
         private const val ACTION_NEXT = "io.github.zxxy326.vinylplayer.NEXT"
         private const val ACTION_TOGGLE = "io.github.zxxy326.vinylplayer.TOGGLE"
         private const val ACTION_CLOSE = "io.github.zxxy326.vinylplayer.CLOSE"
+
+        @Volatile
+        private var instance: PlaybackService? = null
+
+        /** 当前高亮的歌词行，由 WebView 推送 */
+        @Volatile
+        var currentLyric: String = ""
+            private set
+
+        fun setLyric(text: String) {
+            val t = text.trim()
+            if (t == currentLyric) return
+            currentLyric = t
+            val svc = instance ?: return
+            // 这个方法是从 WebView 的 JavaBridge 线程进来的，而 Player 只能在
+            // 自己的应用线程（主线程）上访问，直接 refresh 会抛
+            // "Player is accessed on the wrong thread"
+            try {
+                svc.handler.post { svc.refresh(force = true) }
+            } catch (_: Throwable) {
+            }
+        }
     }
 }

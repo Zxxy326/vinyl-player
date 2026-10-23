@@ -3,9 +3,11 @@ package io.github.zxxy326.vinylplayer
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -18,11 +20,13 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import androidx.webkit.WebViewFeature
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 class MainActivity : AppCompatActivity() {
 
@@ -120,22 +124,44 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Android 15（targetSdk 35）强制 edge-to-edge：WebView 会画到状态栏和
-     * 手势条底下，底部那排播放按钮就被导航条盖住了（"底部按钮被裁切"）。
-     * WebView 本身不解 `env(safe-area-inset-*)`，所以只能在原生这边把
-     * 系统栏的 inset 变成留白。
+     * Android 15（targetSdk 35）强制 edge-to-edge，WebView 会画到状态栏和手势条底下。
      *
-     * 注意：不要直接给 WebView setPadding —— WebView 会忽略自己的 padding
-     * 照旧铺满整块区域，于是白留了。套一层 FrameLayout，padding 加在容器上，
-     * WebView 的可用高度才会真的缩下来。
+     * 做法：系统栏全部透明、内容铺满整屏（沉浸），再把 inset 换算成 CSS 像素
+     * 通过 __setInsets 推给前端，由 CSS 变量 --safe-t/-b/-l/-r 自己留白。
+     *
+     * 为什么不再给容器 setPadding：那样状态栏区域就是一块纯色带，永远做不到
+     * "封面压到状态栏底下"的沉浸效果；而且 WebView 会忽略自己的 padding。
      */
+    private var safeT = 0
+    private var safeB = 0
+    private var safeL = 0
+    private var safeR = 0
+    private var hideStatusBar = false
+
     private fun applyWindowInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(host) { v, insets ->
-            val bars = insets.getInsets(
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= 29) {
+            // 去掉手势条后面那层半透明遮罩，不然底部会出现一条灰带
+            window.isNavigationBarContrastEnforced = false
+        }
+        val ctl = WindowInsetsControllerCompat(window, window.decorView)
+        ctl.isAppearanceLightStatusBars = false   // 深红底 → 状态栏用浅色图标
+        ctl.isAppearanceLightNavigationBars = false
+        ctl.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        ViewCompat.setOnApplyWindowInsetsListener(host) { _, insets ->
+            val b = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or
                     WindowInsetsCompat.Type.displayCutout()
             )
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            val d = resources.displayMetrics.density
+            safeT = (b.top / d).roundToInt()
+            safeB = (b.bottom / d).roundToInt()
+            safeL = (b.left / d).roundToInt()
+            safeR = (b.right / d).roundToInt()
+            pushInsets()
             insets
         }
         // onCreate 阶段视图还没 attach，直接 requestApplyInsets 会被丢掉，
@@ -143,18 +169,66 @@ class MainActivity : AppCompatActivity() {
         host.post {
             ViewCompat.requestApplyInsets(host)
             host.post {
-                if (host.paddingTop == 0 && host.paddingBottom == 0) {
+                if (safeT == 0 && safeB == 0) {
                     val root = window.decorView.rootWindowInsets
                     if (root != null) {
-                        val bars = WindowInsetsCompat.toWindowInsetsCompat(root).getInsets(
+                        val b = WindowInsetsCompat.toWindowInsetsCompat(root).getInsets(
                             WindowInsetsCompat.Type.systemBars() or
                                 WindowInsetsCompat.Type.displayCutout()
                         )
-                        host.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                        val d = resources.displayMetrics.density
+                        safeT = (b.top / d).roundToInt()
+                        safeB = (b.bottom / d).roundToInt()
+                        safeL = (b.left / d).roundToInt()
+                        safeR = (b.right / d).roundToInt()
+                        pushInsets()
                     }
                 }
             }
         }
+    }
+
+    /** 把安全区宽度推给前端（CSS 像素）。页面还没加载完时静默失败，onPageFinished 会再推一次 */
+    private fun pushInsets() {
+        val js = "window.__setInsets&&window.__setInsets($safeT,$safeB,$safeL,$safeR)"
+        try {
+            web.evaluateJavascript(js, null)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /** 设置项：保持屏幕常亮 */
+    fun setKeepScreenOn(on: Boolean) {
+        runOnUiThread {
+            if (on) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
+
+    /** 设置项：隐藏顶部状态栏（下拉仍可临时唤出） */
+    fun setHideStatusBar(on: Boolean) {
+        hideStatusBar = on
+        runOnUiThread { applyStatusBarVisibility() }
+    }
+
+    private fun applyStatusBarVisibility() {
+        val ctl = WindowInsetsControllerCompat(window, window.decorView)
+        if (hideStatusBar) {
+            ctl.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            ctl.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            ctl.show(WindowInsetsCompat.Type.statusBars())
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // 弹过对话框/切回前台后系统会把状态栏放回来，这里再收一次
+        if (hasFocus && hideStatusBar) applyStatusBarVisibility()
     }
 
     private fun configureWebView() {
@@ -202,6 +276,12 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 // 只允许本地资源，外链一律拦下（本地播放器不需要跳转）
                 return request.url.host != "appassets.androidplatform.net"
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                // 页面加载完补推一次安全区：inset 事件可能比首屏更早到
+                pushInsets()
             }
         }
     }

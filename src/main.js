@@ -1,10 +1,10 @@
 /* 装配层：把后端、UI、曲库接到一起 */
 import { $, clamp, debounce, esc } from './core/util.js';
-import { S, loadPrefs, savePrefs, saveResume, getResume, getLastId, getPlaylists, createPlaylist, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist } from './core/store.js';
+import { S, loadPrefs, savePrefs, saveResume, getResume, getLastId, getPlaylists, createPlaylist, deletePlaylist, renamePlaylist, addToPlaylist, removeFromPlaylist, ensureFavorites, isFavorite, toggleFavorite } from './core/store.js';
 import { notePlay, addSeconds, flushStats, resetStats } from './core/stats.js';
 import { libraryStats, fmtBytes, fmtDuration } from './core/quality.js';
 import { HAS_ANDROID, acall, acallJSON } from './core/bridge.js';
-import { IS_WEB, IS_DESKTOP, IS_ANDROID, pickLibrary, rescan, resolvePlayable, loadLyrics, importLyrics, restoreImportedLyrics, loadCover, listen, invoke } from './core/platform.js';
+import { IS_WEB, IS_DESKTOP, IS_ANDROID, pickLibrary, rescan, resolvePlayable, loadLyrics, importLyrics, restoreImportedLyrics, loadCover, listen, invoke, setNowLyric } from './core/platform.js';
 import { DEMO, DEMO_LYRICS } from './data/demo.js';
 import { lrcToLines } from './lyrics/lrc.js';
 import { WebAudioBackend } from './audio/webaudio.js';
@@ -24,6 +24,8 @@ const lyricsView = new LyricsView({
   track: $('lyricTrack'),
   onSeek: (t) => seekTo(t, true)
 });
+// 当前歌词行同步给原生：通知栏 / 锁屏上显示正在唱哪一句
+lyricsView.onLine = (text) => setNowLyric(text);
 
 const spectrum = new Spectrum({ canvas: $('viz'), backend });
 
@@ -78,6 +80,12 @@ const library = new Library({
 
 /* 通知权限：没有它通知栏不会出媒体卡片，设置页要能提示并一键跳转 */
 let notifOk = true;
+
+/* 调试用：?platform=android 强制按安卓渲染设置页 */
+const DEBUG_PLATFORM = (() => {
+  try { return new URLSearchParams(location.search).get('platform') || ''; } catch (_) { return ''; }
+})();
+
 function refreshNotifState(){
   if (!IS_ANDROID || !HAS_ANDROID) return notifOk;
   try {
@@ -94,12 +102,15 @@ function renderLib(extra){
     showLrcImport: IS_ANDROID,
     playlists: getPlaylists(),
     libraryInfo: {
-      platform: IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web',
+      // ?platform=android 可以在桌面浏览器里预览安卓专属的设置项（截图/调试用）
+      platform: DEBUG_PLATFORM || (IS_ANDROID ? 'android' : IS_DESKTOP ? 'desktop' : 'web'),
       folder: S.folder || '',
       notifOk: notifOk
     },
     view: S.view,
-    volume: S.volume
+    volume: S.volume,
+    keepOn: S.keepOn,
+    hideBar: S.hideBar
   }, extra || {});
   library.render(S.tracks, S.index, S.playing, opts);
 }
@@ -150,6 +161,17 @@ function currentTrack(){
   return S.index >= 0 ? S.tracks[S.index] : null;
 }
 
+/* 收藏：一颗心，点了就进固定的「收藏」歌单，再点移出 */
+const favBtn = $('fav');
+
+function paintFav(tr){
+  const on = !!tr && isFavorite(tr.id);
+  favBtn.classList.toggle('on', on);
+  favBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  favBtn.disabled = !tr;
+  favBtn.title = on ? '已收藏 · 再点取消' : '收藏到「收藏」歌单';
+}
+
 function paintMeta(tr){
   const pad = String(S.index + 1).padStart(2, '0');
   $('tEyebrow').textContent = tr.eyebrow || ('SIDE A · TRACK ' + pad);
@@ -162,6 +184,7 @@ function paintMeta(tr){
     (String(tr.title || '').toUpperCase().replace(/[^A-Z0-9\u4e00-\u9fff ]/g, ' ') + ' · ').repeat(3);
   $('rpmLabel').textContent = (tr.format ? tr.format + ' · ' : '') + 'STEREO';
   document.title = (tr.title || 'Vinyl Player') + (tr.artist ? ' — ' + tr.artist : '') + ' · Vinyl Player';
+  paintFav(tr);
 }
 
 async function paintCover(tr){
@@ -561,6 +584,23 @@ function doPlaylistAction(act, id){
 }
 
 /* ================= 设置 ================= */
+
+/* 屏幕相关设置要落到原生窗口上，Web 端没有这两件事 */
+function applyScreenPrefs(){
+  if (!IS_ANDROID || !HAS_ANDROID) return;
+  try { acall('keepScreenOn', { on: !!S.keepOn }); } catch (_) {}
+  try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+}
+
+/* 设置页自己缓存了一份状态，改完要同步过去再重绘，否则界面还显示旧值 */
+function refreshSettings(){
+  library.view = S.view;
+  library.volume = S.volume;
+  library.keepOn = S.keepOn;
+  library.hideBar = S.hideBar;
+  library.renderSettings();
+}
+
 function doSetting(key){
   if (key === 'reset-stats'){
     resetStats();
@@ -571,8 +611,20 @@ function doSetting(key){
     S.view = S.view === 'visual' ? 'lyrics' : 'visual';
     savePrefs();
     applyView();
-    library.renderSettings();
+    refreshSettings();
     toast('默认视图：' + (S.view === 'visual' ? '频谱' : '歌词'));
+  } else if (key === 'keep-on'){
+    S.keepOn = !S.keepOn;
+    savePrefs();
+    applyScreenPrefs();
+    refreshSettings();
+    toast(S.keepOn ? '屏幕常亮 · 已开启' : '屏幕常亮 · 已关闭');
+  } else if (key === 'hide-bar'){
+    S.hideBar = !S.hideBar;
+    savePrefs();
+    applyScreenPrefs();
+    refreshSettings();
+    toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
   } else if (key === 'notif'){
     if (HAS_ANDROID) acall('openNotifSettings');
   }
@@ -653,6 +705,16 @@ $('emptyDemo').addEventListener('click', () => {
 });
 $('prev').addEventListener('click', () => goPrev());
 $('next').addEventListener('click', () => goNext());
+
+/* 心形按钮：收藏 / 取消收藏 */
+favBtn.addEventListener('click', () => {
+  const tr = currentTrack();
+  if (!tr) return;
+  const on = toggleFavorite(tr.id);
+  paintFav(tr);
+  refreshPlaylists();
+  toast(on ? ('已收藏「' + (tr.title || '这首') + '」') : '已取消收藏');
+});
 
 /* 加入歌单选择层 */
 $('plPickCancel').addEventListener('click', () => { $('plPick').hidden = true; });
@@ -740,6 +802,18 @@ function onCommandEvent(c){
   else if (cmd === 'play'){ setPlaying(true); }
 }
 
+/* 原生把安全区推过来（单位已经是 CSS 像素）。
+   WebView 不解 env(safe-area-inset-*)，只能由壳子算好塞进 CSS 变量：
+   状态栏 / 手势条底下要留白，但背景仍然铺满整屏，做到"内容让开、底色不留缝"。 */
+window.__setInsets = (t, b, l, r) => {
+  const s = document.documentElement.style;
+  s.setProperty('--safe-t', (t || 0) + 'px');
+  s.setProperty('--safe-b', (b || 0) + 'px');
+  s.setProperty('--safe-l', (l || 0) + 'px');
+  s.setProperty('--safe-r', (r || 0) + 'px');
+  document.body.classList.add('has-insets');
+};
+
 /* 安卓壳通过 evaluateJavascript 调这里 */
 window.__playerEvent = (name, payload) => {
   if (name === 'position') onPositionEvent(payload);
@@ -774,6 +848,8 @@ window.__rescan = async () => {
 /* ================= 启动 ================= */
 async function boot(){
   loadPrefs();
+  ensureFavorites();   // 「收藏」歌单先建出来，歌单页里始终在
+  paintFav(currentTrack());
   // ?view=visual / ?view=lyrics 强制指定视图，调试和无头截图用
   try {
     const v = new URLSearchParams(location.search).get('view');
@@ -796,6 +872,7 @@ async function boot(){
   transport.setShuffle(S.shuffle);
   transport.setRepeat(S.repeat);
   backend.setVolume(S.volume);
+  applyScreenPrefs();   // 常亮 / 隐藏状态栏：开机就按上次的选择恢复
 
   if (IS_ANDROID){
     await listen('player://position', onPositionEvent);

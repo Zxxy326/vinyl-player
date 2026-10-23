@@ -32,6 +32,10 @@ export class Library {
     this.playlists = [];
     this.libraryInfo = {};
     this.query = '';
+    this.view = 'lyrics';
+    this.volume = .72;
+    this.keepOn = false;
+    this.hideBar = false;
 
     this.searchInput = o.searchInput || null;
     this.searchClear = o.searchClear || null;
@@ -167,6 +171,8 @@ export class Library {
     if (this.opts.libraryInfo) this.libraryInfo = this.opts.libraryInfo;
     if (this.opts.view) this.view = this.opts.view;
     if (this.opts.volume != null) this.volume = this.opts.volume;
+    if (this.opts.keepOn != null) this.keepOn = !!this.opts.keepOn;
+    if (this.opts.hideBar != null) this.hideBar = !!this.opts.hideBar;
 
     if (this.lrcBtn) this.lrcBtn.hidden = !this.opts.showLrcImport;
     this.count.textContent = this.tracks.length ? this.tracks.length + ' 首' : '';
@@ -332,6 +338,7 @@ export class Library {
     const active = this.drill && this.drill.kind === 'playlist' ? this.drill.key : '';
     const html = this.playlists.map((p) => {
       const on = active === p.id;
+      const isFav = p.id === 'pl:fav';   // 「收藏」是固定歌单，图标用心形、不给删
       const secs = p.ids.reduce((s, id) => {
         const t = this.tracks.find(x => x.id === id);
         return s + (t ? (t.duration || 0) : 0);
@@ -340,7 +347,7 @@ export class Library {
         ? '<div class="grp-body">' + this.playlistTracks(p) + '</div>'
         : '';
       return '<div class="grp' + (on ? ' is-cur' : '') + '" data-pl="' + p.id + '">' +
-        '<span class="grp-ico">♪</span>' +
+        '<span class="grp-ico' + (isFav ? ' is-fav' : '') + '">' + (isFav ? '♥' : '♪') + '</span>' +
         '<span class="tr-body">' +
           '<span class="tr-t">' + esc(p.name) + '</span>' +
           '<span class="tr-a">' + p.ids.length + ' 首 · ' + fmtDuration(secs) + '</span>' +
@@ -351,7 +358,7 @@ export class Library {
 
     const cur = this.drill && this.drill.kind === 'playlist'
       ? this.playlists.find(p => p.id === this.drill.key) : null;
-    const actions = cur
+    const actions = cur && cur.id !== 'pl:fav'
       ? '<div class="pl-actions">' +
           '<button class="tool danger" data-act="delete">删除这个歌单</button>' +
         '</div>'
@@ -450,6 +457,21 @@ export class Library {
         '</div>'
       : '';
 
+    const sw = (key, on, title, desc) =>
+      '<button class="set-switch" data-set="' + key + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="sw-txt"><b>' + title + '</b><em>' + desc + '</em></span>' +
+        '<span class="sw-track"><i></i></span>' +
+      '</button>';
+
+    const screenGroup = platform === 'android'
+      ? '<div class="set-group">' +
+          '<h3>屏幕</h3>' +
+          sw('keep-on', this.keepOn, '保持屏幕常亮', '放唱片的时候不让屏幕自动熄灭') +
+          sw('hide-bar', this.hideBar, '隐藏顶部状态栏', '时间、电量那一行收起，封面更满') +
+          '<p class="set-note">隐藏状态栏后，从屏幕顶部下滑可以临时叫回来。</p>' +
+        '</div>'
+      : '';
+
     this.lists.settings.innerHTML =
       '<div class="set-group">' +
         '<h3>音乐库</h3>' +
@@ -490,6 +512,8 @@ export class Library {
       '</div>' +
 
       notifGroup +
+
+      screenGroup +
 
       '<div class="set-group">' +
         '<h3>关于</h3>' +

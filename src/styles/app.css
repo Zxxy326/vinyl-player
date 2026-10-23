@@ -179,6 +179,9 @@
     top:0;right:0;bottom:0;width:min(420px,42vw);
     transform:translateX(102%);
     border-left:1px solid rgba(246,234,217,.12);
+    /* 横屏时状态栏盖在抽屉上，头部要自己让开 */
+    padding-top:var(--safe-t);
+    padding-bottom:var(--safe-b);
   }
   .sheet.open{transform:none}
 }
@@ -190,10 +193,15 @@
     grid-template-columns:1fr;
     grid-template-rows:auto minmax(0,1fr);
     gap:0;
-    padding:calc(var(--safe-t) + 14px) 20px calc(var(--safe-b) + 10px);
+    padding:
+      calc(var(--safe-t) + 14px)
+      calc(var(--safe-r) + 20px)
+      calc(var(--safe-b) + 10px)
+      calc(var(--safe-l) + 20px);
   }
-  /* 唱片居中：左右留白必须对称，之前给右侧留了 24px 让唱臂，结果重心偏左 */
-  .deck{--disc:min(38vh,72vw);padding-top:6px}
+  /* 唱片居中：左右留白必须对称，之前给右侧留了 24px 让唱臂，结果重心偏左
+     顶部留一段气口，让唱盘落在屏幕上半区的中间（对齐用户那版竖屏稿） */
+  .deck{--disc:min(38vh,72vw);padding-top:clamp(10px,7vh,60px)}
   .tonearm{transform:scale(.96);transform-origin:50% 50%}
   .panel{
     border-left:0;padding-left:0;
@@ -211,9 +219,20 @@
   .controls{margin-top:8px;padding-top:10px}
   .row{margin-top:10px;gap:10px}
   .btns{gap:clamp(14px,4.4vw,22px)}
-  .hw.tl,.hw.bl,.hw.bc{display:none}
-  .hw.br{right:24px;bottom:10px;gap:6px}
-  .hw.br .knob{width:24px}
+  /* 唱机零件：塞进唱片左右下角的空隙里，不压在片身上
+     电平表贴左边、两颗旋钮贴右边，底部基本与唱片下沿齐平 */
+  .hw.tl,.hw.bc{display:none}
+  .hw.bl{
+    display:flex;left:0;bottom:5%;
+    flex-direction:column;align-items:flex-start;gap:6px;
+  }
+  .hw.bl .eq{height:15px}
+  .hw.bl .tag{font-size:7.5px;letter-spacing:.22em;line-height:1.4}
+  .hw.br{
+    display:flex;right:0;bottom:1%;left:auto;
+    flex-direction:row;align-items:center;gap:6px;
+  }
+  .hw.br .knob{width:26px}
   /* 竖屏只隐藏指示灯；两个旋钮都保留（之前的写法把音量旋钮也一起藏了，看着像少了一个按钮） */
   .hw.br .led{display:none}
   .rpm{display:none}
@@ -229,7 +248,8 @@
   .sheet-head{padding:14px 16px 10px}
   .sheet-tools{padding:10px 14px 12px}
   .lib-list{padding-bottom:calc(18px + var(--safe-b))}
-  .toast{bottom:calc(24px + var(--safe-b))}
+  /* 提示条要抬到传输键上方，否则正好压住播放键 */
+  .toast{bottom:calc(88px + var(--safe-b))}
 }
 
 /* 超窄竖屏（小屏手机）再收一档 */
@@ -244,7 +264,13 @@
 
 /* 横屏手机（高度很小）：压扁但不换版式 */
 @media (orientation:landscape) and (max-height:520px){
-  .stage{padding:10px 18px}
+  .stage{
+    padding:
+      calc(var(--safe-t) + 10px)
+      calc(var(--safe-r) + 18px)
+      calc(var(--safe-b) + 10px)
+      calc(var(--safe-l) + 18px);
+  }
   .deck{--disc:min(78vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
@@ -329,6 +355,12 @@ body.perf-low .empty{backdrop-filter:none}
 }
 .grp.is-cur .grp .tr-body{display:flex;flex-direction:column;min-width:0}
 .grp-ico{background:rgba(217,43,57,.3);border-color:rgba(217,43,57,.5);color:#fff}
+/* 「收藏」是固定歌单：红底上换成粉色心形，跟普通歌单区分开 */
+.grp-ico.is-fav{
+  background:rgba(255,138,149,.18);
+  border-color:rgba(255,138,149,.42);
+  color:#ff8a95;font-size:14px;
+}
 .grp-arrow{
   flex:none;font-size:12px;line-height:1;white-space:nowrap;
   color:rgba(246,234,217,.32);padding-left:2px;
@@ -418,6 +450,37 @@ body.perf-low .empty{backdrop-filter:none}
 }
 .set-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .set-note{margin:10px 0 0;font-size:10px;line-height:1.6;color:rgba(246,234,217,.3)}
+
+/* 开关行：整行可点，右边一颗滑动开关 */
+.set-switch{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:9px 2px;border:0;border-bottom:1px solid rgba(246,234,217,.05);
+  background:none;font:inherit;text-align:left;cursor:pointer;
+  color:rgba(246,234,217,.82);-webkit-tap-highlight-color:transparent;
+}
+.set-switch:last-child{border-bottom:0}
+.sw-txt{flex:1;min-width:0;display:block;font-size:11px;line-height:1.35}
+.sw-txt b{display:block;font-weight:400;color:rgba(246,234,217,.86)}
+.sw-txt em{
+  display:block;margin-top:2px;font-style:normal;
+  font-size:9.5px;color:rgba(246,234,217,.32);letter-spacing:.02em;
+}
+.sw-track{
+  flex:none;width:34px;height:19px;border-radius:100px;
+  background:rgba(246,234,217,.12);
+  box-shadow:inset 0 0 0 1px rgba(246,234,217,.14);
+  position:relative;transition:background .25s var(--ease), box-shadow .25s var(--ease);
+}
+.sw-track i{
+  position:absolute;left:2px;top:2px;width:15px;height:15px;border-radius:50%;
+  background:rgba(246,234,217,.75);transition:transform .25s var(--ease), background .25s;
+}
+.set-switch[aria-pressed="true"] .sw-track{
+  background:rgba(255,138,149,.42);
+  box-shadow:inset 0 0 0 1px rgba(255,138,149,.6);
+}
+.set-switch[aria-pressed="true"] .sw-track i{transform:translateX(15px);background:#fff4ea}
+.set-switch:active .sw-track i{width:17px}
 .lib-empty.small{padding:10px 12px;font-size:11px}
 
 /* 竖屏抽屉：页签横向可滚 */

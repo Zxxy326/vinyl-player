@@ -60,6 +60,11 @@ export class LyricsView {
       el.classList.toggle('is-active', k === i);
     });
     this.center();
+    // 把当前这句推给原生（通知栏/锁屏显示正在唱哪一句）
+    if (typeof this.onLine === 'function'){
+      const l = this.lines[i];
+      this.onLine(l ? (l.en || l.cn || '') : '');
+    }
   }
 
   center(){

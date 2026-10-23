@@ -223,6 +223,12 @@ export function restoreImportedLyrics(track){
   return track;
 }
 
+/* 当前歌词行推给原生（通知栏 / 锁屏副标题）。只有安卓原生壳有这条路。 */
+export function setNowLyric(text){
+  if (!IS_ANDROID || !HAS_ANDROID) return;
+  try { acall('lyric', { text: text || '' }); } catch (_) {}
+}
+
 export async function loadCover(track){
   if (track.artUrl) return track.artUrl;
   try {
@@ -232,8 +238,17 @@ export async function loadCover(track){
     } else if (IS_ANDROID){
       // 安卓：原生侧先掏内嵌图片，没有再退回专辑封面
       const args = { albumId: track.albumId == null ? '' : String(track.albumId), uri: track.uri || '' };
-      const b64 = HAS_ANDROID ? acall('cover', args) : await pinvoke('cover', args);
-      if (b64) return 'data:image/jpeg;base64,' + b64;
+      const raw = HAS_ANDROID ? acall('cover', args) : await pinvoke('cover', args);
+      if (raw){
+        // 安卓返回 {mime, data}：MIME 必须照抄，封面可能是 PNG / WebP
+        if (typeof raw === 'string' && raw.charAt(0) === '{'){
+          try {
+            const o = JSON.parse(raw);
+            if (o && o.data) return 'data:' + (o.mime || 'image/jpeg') + ';base64,' + o.data;
+          } catch (_) {}
+        }
+        return 'data:image/jpeg;base64,' + raw;
+      }
     }
   } catch (_) {}
   return '';
