@@ -151,25 +151,3 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 /* 沉浸播放按钮亮起 */
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
-
-/* ---- 沉浸切换的过渡幕 ----
-   桌面端的全屏是原生窗口操作（setFullscreen），边框和窗口尺寸在同一帧里
-   就换掉了，CSS 完全插不上手 —— 所以不管怎么调布局过渡，露出来的那一瞬
-   都是硬切。这里换成"暗场换景"：先把幕拉上，幕后面换窗口、跑布局过渡，
-   等窗口落定再把幕揭开，观众看到的是连续的暗→亮，而不是一帧跳变。
-   只用 opacity（合成层动画），不碰 backdrop-filter 之类会重排的效果，
-   免得窗口重建合成层时把过渡打断。 */
-.fx-veil{
-  position:fixed;top:0;right:0;bottom:0;left:0;
-  z-index:260;
-  pointer-events:none;
-  opacity:0;
-  background:radial-gradient(120% 100% at 50% 46%, rgba(22,7,11,.60), rgba(7,2,4,.90));
-  transition:opacity .19s linear;
-  will-change:opacity;
-}
-/* 幕拉上时挡住误触；揭开后交还点击 */
-.fx-veil.is-on{pointer-events:auto}
-@media (prefers-reduced-motion:reduce){
-  .fx-veil{transition-duration:.01s}
-}

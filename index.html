@@ -28,6 +28,17 @@
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
+  /* 视口单位的"可过渡版本"。平时就等于 1vh / 1vw；
+     沉浸切换时会被临时钉成固定 px（见 main.js 的 pinStage），
+     这样窗口尺寸跳变的那一刻，唱片尺寸不会跟着跳。
+     注册成 <length> 之后还能被 transition 插值，冻结和恢复都是连续的。 */
+  --vh1:1vh;
+  --vw1:1vw;
+}
+@property --vh1{syntax:'<length>';inherits:true;initial-value:0px}
+@property --vw1{syntax:'<length>';inherits:true;initial-value:0px}
+html.vp-tween{
+  transition:--vh1 .48s cubic-bezier(.22,.61,.36,1), --vw1 .48s cubic-bezier(.22,.61,.36,1);
 }
 html,body{height:100%}
 body{
@@ -81,7 +92,7 @@ body.perf-low .gloss{display:none}
 /* styles/deck.css */
 /* ============ 左：唱机 ============ */
 .deck{
-  --disc:min(74vh,41vw);
+  --disc:min(calc(74 * var(--vh1, 1vh)), calc(41 * var(--vw1, 1vw)));
   position:relative;display:grid;place-items:center;
   container-type:inline-size;
 }
@@ -336,9 +347,10 @@ body.perf-low .gloss{display:none}
 }
 .fav svg{
   width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;
-  /* 心形的视觉重心在下方两个圆瓣上，几何居中看着会偏低偏左；
-     描边又让左右各多出半个线宽，整体往左上抬半像素才"看着正" */
-  transform:translate(-.5px,-1px);
+  /* 实测：这个心形的墨迹框中心只比 viewBox 中心低 0.09px，横向本来就正，
+     所以只做纵向补偿。上半两个圆瓣面积大、下半收成尖，几何居中时视觉重心偏上，
+     往下压半像素就正了。之前那版 translate(-.5px,-1px) 横向和纵向都过头了。 */
+  transform:translateY(.5px);
 }
 .fav:hover{transform:scale(1.06);color:var(--cream)}
 .fav.on{
@@ -761,7 +773,7 @@ body.view-visual .visual{display:flex}
      左右零件是挂在 .deck 下沿上（bottom 反推）的，跟着唱片一起走，相对位置不变；
      .deck 矮了 35px，右栏就多出 35px，标题和歌词都能松一口气 */
   .deck{
-    --disc:min(38vh,72vw);
+    --disc:min(calc(38 * var(--vh1, 1vh)), calc(72 * var(--vw1, 1vw)));
     padding-top:clamp(8px,2.8vh,24px);
     /* 唱片抬起来以后，零件和面板内容离唱片太近了。
        这里只加下内边距：.deck 的高度是 auto，内容盒仍是唱片那么大，
@@ -857,7 +869,7 @@ body.view-visual .visual{display:flex}
 
 /* 超窄竖屏（小屏手机）再收一档 */
 @media (orientation:portrait) and (max-height:680px){
-  .deck{--disc:min(34vh,62vw)}
+  .deck{--disc:min(calc(34 * var(--vh1, 1vh)), calc(62 * var(--vw1, 1vw)))}
   .title{font-size:19px}
   .artist{display:none}
   .credit{display:none}
@@ -875,7 +887,7 @@ body.view-visual .visual{display:flex}
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
-  .deck{--disc:min(80vh,34vw)}
+  .deck{--disc:min(calc(80 * var(--vh1, 1vh)), calc(34 * var(--vw1, 1vw)))}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
   .credit{display:none}
@@ -898,7 +910,7 @@ body.view-visual .visual{display:flex}
 
 /* 平板 / 中等宽度：两栏但收紧 */
 @media (min-width:1001px) and (max-width:1240px){
-  .deck{--disc:min(70vh,38vw)}
+  .deck{--disc:min(calc(70 * var(--vh1, 1vh)), calc(38 * var(--vw1, 1vw)))}
   .title{font-size:clamp(28px,3.6vw,42px)}
 }
 
@@ -1261,28 +1273,6 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 /* 沉浸播放按钮亮起 */
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
-
-/* ---- 沉浸切换的过渡幕 ----
-   桌面端的全屏是原生窗口操作（setFullscreen），边框和窗口尺寸在同一帧里
-   就换掉了，CSS 完全插不上手 —— 所以不管怎么调布局过渡，露出来的那一瞬
-   都是硬切。这里换成"暗场换景"：先把幕拉上，幕后面换窗口、跑布局过渡，
-   等窗口落定再把幕揭开，观众看到的是连续的暗→亮，而不是一帧跳变。
-   只用 opacity（合成层动画），不碰 backdrop-filter 之类会重排的效果，
-   免得窗口重建合成层时把过渡打断。 */
-.fx-veil{
-  position:fixed;top:0;right:0;bottom:0;left:0;
-  z-index:260;
-  pointer-events:none;
-  opacity:0;
-  background:radial-gradient(120% 100% at 50% 46%, rgba(22,7,11,.60), rgba(7,2,4,.90));
-  transition:opacity .19s linear;
-  will-change:opacity;
-}
-/* 幕拉上时挡住误触；揭开后交还点击 */
-.fx-veil.is-on{pointer-events:auto}
-@media (prefers-reduced-motion:reduce){
-  .fx-veil{transition-duration:.01s}
-}
 
 
 /* styles/boot.css */
@@ -1697,10 +1687,6 @@ setTimeout(function(){
     </div>
   </div>
 </div>
-
-<!-- 沉浸切换的过渡幕：桌面端全屏是原生窗口操作，没有过渡可加，
-     靠这层幕把硬切盖住（详见 chrome.css 的 .fx-veil） -->
-<div class="fx-veil" id="fxVeil" aria-hidden="true"></div>
 
 <script>
 /* ---- core/util.js ---- */
@@ -4851,77 +4837,222 @@ function showCtrlBar(){
   }, 2600);
 }
 
-/* 桌面端全屏是原生窗口操作（setFullscreen），窗口边框和尺寸在同一帧里
-   就换掉了，CSS 完全插不上手 —— 光调布局过渡，露出来那一瞬还是硬切。
-   所以这里"暗场换景"：先拉幕，幕后面换窗口 + 跑布局过渡，落定了再揭幕。
-   观众看到的是连续的暗→亮，中间那一帧跳变藏在幕底下。 */
+/* 桌面端全屏是原生窗口操作（setFullscreen），窗口边框和尺寸在同一帧里就换掉了，
+   CSS 过渡拦不住 —— 这也是"硬切"的唯一来源：不是布局动画没写，而是布局被换掉了。
+
+   所以不跟窗口抢时间，改成"让内容不动"：
+     进入 —— 先把 .stage 钉成当前尺寸居中（画面完全不变），换完窗口内容还是那么大，
+             周围先露出背景，再把 .stage 连续放大到铺满；
+     退出 —— 反过来，先在幕前把 .stage 连续缩回原窗口大小，再让窗口变回去，
+             窗口落地那一刻内容已经正好是那个尺寸。
+   两个方向都只有"画布在扩张/收缩"，内容本身没有一帧跳变。 */
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (_) { return false; } };
 
-function veil(on){
-  const v = $('fxVeil');
-  if (!v) return Promise.resolve();
-  // 暗下去快、亮起来慢：进场干脆，出场柔和
-  const dur = reduceMotion() ? 0 : (on ? 170 : 380);
-  v.style.transitionDuration = dur + 'ms';
-  v.style.opacity = on ? '1' : '0';
-  v.classList.toggle('is-on', on);
-  return wait(dur);
+/* 等窗口尺寸真的变了（原生全屏是异步的，await 返回时 innerWidth 可能还没跟上） */
+async function waitChanged(prev, ms = 340){
+  const t0 = performance.now();
+  while (innerWidth === prev && performance.now() - t0 < ms) await wait(16);
+}
+
+/* 把 .stage 钉成指定尺寸并居中 —— 和"铺满当前视口"在画面上完全等价 */
+function pinStage(w, h){
+  const st = document.querySelector('.stage');
+  if (!st) return null;
+  st.style.position = 'fixed';
+  st.style.left = '50%'; st.style.top = '50%';
+  st.style.right = 'auto'; st.style.bottom = 'auto';
+  st.style.width = w + 'px'; st.style.height = h + 'px';
+  st.style.transform = 'translate(-50%,-50%)';
+  st.style.transition = 'none';
+  void st.offsetWidth;
+  return st;
+}
+
+function unpinStage(st){
+  if (!st) return;
+  st.style.transition = '';
+  st.style.position = '';
+  st.style.left = ''; st.style.top = '';
+  st.style.right = ''; st.style.bottom = '';
+  st.style.width = ''; st.style.height = '';
+  st.style.transform = '';
+}
+
+/* 宽高连续过渡：内容跟着尺寸逐帧重排，等于自己做了一个窗口放大/缩小动画 */
+async function slideStage(st, w, h, dur){
+  if (!st || !dur) return;
+  st.style.transition = `width ${dur}ms cubic-bezier(.22,.61,.36,1), height ${dur}ms cubic-bezier(.22,.61,.36,1)`;
+  st.style.width = w + 'px';
+  st.style.height = h + 'px';
+  await wait(dur + 20);
+}
+
+/* 唱片尺寸 --disc 是按 vh/vw 算的。窗口一换，vh 立刻变，唱片就会在一帧里
+   从 288 跳到 410 —— 光钉住 .stage 挡不住这个。所以把 vh/vw 换成可插值的
+   --vh1/--vw1：钉住时冻结成原窗口的 px，过渡时再连续放回新视口的值。
+   结束时新值正好等于 1vh，所以释放内联值不会有任何跳变。 */
+const rootEl = document.documentElement;
+
+/* 唱片直径 --disc 是「媒体查询断点 + vh/vw」一起算出来的，比单纯冻结 vh 复杂：
+   1180 宽命中 70vh/38vw，1920 宽换到 74vh/41vw —— 同样冻结 vh，系数一换
+   直径就从 448 跳到 484。所以切换期间干脆把 --disc 钉成 px，自己插值。 */
+function readDisc(){
+  const p = document.querySelector('.platter');
+  return p ? p.getBoundingClientRect().width : 0;
+}
+
+/* 桌面端 --disc 只有两档系数（见 app.css）：
+   1001–1240 宽用 70vh/38vw，其余用 74vh/41vw。
+   退出全屏时要先把唱片缩到"窗口变回去之后该多大"，可那一刻视口还是全屏、
+   量不出来，只能按目标尺寸算。**改了 CSS 断点记得同步这里。** */
+function discFor(w, h){
+  const narrow = w >= 1001 && w <= 1240;
+  const kh = narrow ? 70 : 74, kw = narrow ? 38 : 41;
+  return Math.min(kh * h / 100, kw * w / 100);
+}
+
+/* 临时放开 --disc 和 vh 冻结，量出"当前视口下该多大"，再立刻钉回 keepPx。
+   全过程在同一个任务里，浏览器不会画出中间态。 */
+function measureDiscFresh(w, h, keepPx){
+  const deck = document.querySelector('.deck');
+  if (!deck) return 0;
+  deck.style.removeProperty('--disc');
+  rootEl.style.removeProperty('--vh1');
+  rootEl.style.removeProperty('--vw1');
+  const v = readDisc();
+  deck.style.setProperty('--disc', keepPx + 'px');
+  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
+  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
+  return v;
+}
+
+/* 逐帧插值 --disc：唱片和画布同步长大，而不是先跳一下再放大 */
+async function tweenDisc(from, to, dur){
+  const deck = document.querySelector('.deck');
+  if (!deck) return;
+  deck.style.setProperty('--disc', from + 'px');
+  if (!dur || !from || !to || Math.abs(to - from) < 0.5) return;
+  void deck.offsetWidth;
+  const t0 = performance.now();
+  await new Promise((res) => {
+    const step = () => {
+      const t = Math.min(1, (performance.now() - t0) / dur);
+      const e = 1 - Math.pow(1 - t, 3);   // 和 cubic-bezier(.22,.61,.36,1) 接近
+      deck.style.setProperty('--disc', (from + (to - from) * e) + 'px');
+      if (t < 1) requestAnimationFrame(step); else res();
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+function freezeViewportUnits(w, h){
+  rootEl.classList.remove('vp-tween');
+  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
+  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
+  void rootEl.offsetWidth;
+}
+
+async function tweenViewportUnits(w, h, dur){
+  if (!dur) return;
+  rootEl.classList.add('vp-tween');
+  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
+  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
+  await wait(dur + 20);
+}
+
+function releaseViewportUnits(){
+  rootEl.classList.remove('vp-tween');
+  rootEl.style.removeProperty('--vh1');
+  rootEl.style.removeProperty('--vw1');
 }
 
 let immersiveBusy = false;
+let stagePrev = null;   // 进沉浸前的视口尺寸，退出时用它当缩回的终点
 
 async function setImmersive(on){
   // 过渡期间忽略重复触发，否则快速连点会把两次窗口切换叠在一起
   if (on === immersive || immersiveBusy) return;
   immersiveBusy = true;
-  const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端需要幕
+  const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端才需要这套
+  const dur = reduceMotion() ? 0 : 480;
   try {
     immersive = on;
     const b = $('immersiveBtn');
     if (b) b.setAttribute('aria-pressed', String(on));
 
-    if (soft) await veil(true);           // 先暗场，下面所有变化都在幕后发生
-
-    document.body.classList.toggle('immersive', on);
-
     if (on){
       if (soft){
         const w = win();
+        const w0 = innerWidth, h0 = innerHeight;
+        const disc0 = readDisc();
+        const st = pinStage(w0, h0);      // 先钉住：这一帧画面看不出任何变化
+        freezeViewportUnits(w0, h0);      // 视口单位也冻住
+        const deck = document.querySelector('.deck');
+        if (deck) deck.style.setProperty('--disc', disc0 + 'px');   // 免疫断点换档
+        stagePrev = { w: w0, h: h0 };
         if (w){ try { await w.setFullscreen(true); } catch (_) {} }
-      } else if (IS_ANDROID && HAS_ANDROID){
-        try { acall('hideStatusBar', { on: true }); } catch (_) {}
-      } else if (document.documentElement.requestFullscreen){
-        try { await document.documentElement.requestFullscreen(); } catch (_) {}
+        await waitChanged(w0);            // 等窗口真的变全屏
+        const w1 = innerWidth, h1 = innerHeight;
+        const disc1 = measureDiscFresh(w1, h1, disc0);
+        document.body.classList.toggle('immersive', true);
+        // 画布、唱片、视口单位三条线同步连续放大到铺满
+        await Promise.all([
+          slideStage(st, w1, h1, dur),
+          tweenDisc(disc0, disc1, dur),
+          tweenViewportUnits(w1, h1, dur)
+        ]);
+        unpinStage(st);
+        releaseViewportUnits();
+        if (deck) deck.style.removeProperty('--disc');
+      } else {
+        document.body.classList.toggle('immersive', true);
+        if (IS_ANDROID && HAS_ANDROID){
+          try { acall('hideStatusBar', { on: true }); } catch (_) {}
+        } else if (document.documentElement.requestFullscreen){
+          try { await document.documentElement.requestFullscreen(); } catch (_) {}
+        }
       }
       await keepAwake(true);
-    } else {
-      if (soft){
-        const w = win();
-        if (w){ try { await w.setFullscreen(false); } catch (_) {} }
-      } else if (IS_ANDROID && HAS_ANDROID){
-        try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
-      } else if (document.fullscreenElement && document.exitFullscreen){
-        try { await document.exitFullscreen(); } catch (_) {}
-      }
-      await keepAwake(false);
-      clearTimeout(ctrlTimer);
-      document.body.classList.remove('ctrl-hidden');
-    }
-
-    if (soft){
-      // 窗口尺寸落定再揭幕，否则幕揭开时画面还在动；
-      // 这段等待也让 .panel 的 padding 过渡（.42s）走完大半
-      await wait(120);
-      await veil(false);
-    }
-
-    if (on){
       showCtrlBar();
       // 手机上没有键盘，别提示快捷键
       toast(IS_ANDROID || matchMedia('(hover:none)').matches
         ? '沉浸播放 · 再点一次退出'
         : '沉浸播放 · 按 F 或 Esc 退出');
+    } else {
+      if (soft){
+        const w = win();
+        const fromW = innerWidth, fromH = innerHeight;
+        const disc0 = readDisc();
+        const st = pinStage(fromW, fromH);
+        freezeViewportUnits(fromW, fromH);
+        const deck = document.querySelector('.deck');
+        if (deck) deck.style.setProperty('--disc', disc0 + 'px');
+        // 先在窗口还是全屏的时候缩回原尺寸，窗口落地那一刻内容正好吻合
+        const back = stagePrev || { w: screen.availWidth, h: screen.availHeight };
+        const disc1 = discFor(back.w, back.h);
+        await Promise.all([
+          slideStage(st, back.w, back.h, dur),
+          tweenDisc(disc0, disc1, dur),
+          tweenViewportUnits(back.w, back.h, dur)
+        ]);
+        if (w){ try { await w.setFullscreen(false); } catch (_) {} }
+        await waitChanged(fromW);
+        unpinStage(st);
+        releaseViewportUnits();
+        if (deck) deck.style.removeProperty('--disc');
+        stagePrev = null;
+      } else {
+        if (IS_ANDROID && HAS_ANDROID){
+          try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+        } else if (document.fullscreenElement && document.exitFullscreen){
+          try { await document.exitFullscreen(); } catch (_) {}
+        }
+      }
+      document.body.classList.toggle('immersive', false);
+      await keepAwake(false);
+      clearTimeout(ctrlTimer);
+      document.body.classList.remove('ctrl-hidden');
     }
   } finally {
     immersiveBusy = false;

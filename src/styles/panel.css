@@ -50,9 +50,10 @@
 }
 .fav svg{
   width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;
-  /* 心形的视觉重心在下方两个圆瓣上，几何居中看着会偏低偏左；
-     描边又让左右各多出半个线宽，整体往左上抬半像素才"看着正" */
-  transform:translate(-.5px,-1px);
+  /* 实测：这个心形的墨迹框中心只比 viewBox 中心低 0.09px，横向本来就正，
+     所以只做纵向补偿。上半两个圆瓣面积大、下半收成尖，几何居中时视觉重心偏上，
+     往下压半像素就正了。之前那版 translate(-.5px,-1px) 横向和纵向都过头了。 */
+  transform:translateY(.5px);
 }
 .fav:hover{transform:scale(1.06);color:var(--cream)}
 .fav.on{
