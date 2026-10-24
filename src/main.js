@@ -881,10 +881,12 @@ function discFor(w, h){
    计时器会差半帧到 50ms，那一小段唱片明显偏大）。
    兜底：过渡万一被丢弃、进度一直不动，就按时间强行收尾，别把循环卡死。 */
 async function tweenDisc(st, w0, w1, d0, d1, dur){
-  const deck = document.querySelector('.deck');
-  if (!deck) return;
-  if (!dur){ deck.style.setProperty('--disc', d1 + 'px'); return; }
-  deck.style.setProperty('--disc', d0 + 'px');
+  /* 注意：--disc 只被 .platter 消费，所以钉在 .platter 上而不是 .deck 上。
+     挂在 .deck 会让整个 deck 子树每帧重算样式，实测帧数明显更低。 */
+  const pl = document.querySelector('.platter');
+  if (!pl) return;
+  if (!dur){ pl.style.setProperty('--disc', d1 + 'px'); return; }
+  pl.style.setProperty('--disc', d0 + 'px');
   const t0 = performance.now();
   await new Promise((res) => {
     const step = () => {
@@ -892,13 +894,14 @@ async function tweenDisc(st, w0, w1, d0, d1, dur){
       let p = w1 === w0 ? 1 : (cw - w0) / (w1 - w0);
       p = Math.min(1, Math.max(0, p));
       if (performance.now() - t0 > dur * 2) p = 1;
-      deck.style.setProperty('--disc', (d0 + (d1 - d0) * p) + 'px');
+      pl.style.setProperty('--disc', (d0 + (d1 - d0) * p) + 'px');
       if (p < 1) requestAnimationFrame(step); else res();
     };
     requestAnimationFrame(step);
   });
 }
 
+let __immFrames = 0, __immT0 = 0;   // 诊断：过渡实际出了多少帧
 let immersiveBusy = false;
 let stagePrev = null;   // 进沉浸前的视口尺寸，退出时缩回去
 
@@ -907,28 +910,28 @@ let stagePrev = null;   // 进沉浸前的视口尺寸，退出时缩回去
 function pinStage(w, h, disc){
   const st = document.querySelector('.stage');
   if (!st) return null;
-  const deck = document.querySelector('.deck');
+  const pl = document.querySelector('.platter');
   st.style.transition = 'none';
   st.style.position = 'fixed';
   st.style.left = '50%'; st.style.top = '50%';
   st.style.right = 'auto'; st.style.bottom = 'auto';
   st.style.width = w + 'px'; st.style.height = h + 'px';
   st.style.transform = 'translate(-50%,-50%)';
-  if (deck && disc > 0) deck.style.setProperty('--disc', disc + 'px');
+  if (pl && disc > 0) pl.style.setProperty('--disc', disc + 'px');
   void st.offsetWidth;
   return st;
 }
 
 function unpinStage(st){
   if (!st) return;
-  const deck = document.querySelector('.deck');
+  const pl = document.querySelector('.platter');
   st.style.transition = '';
   st.style.position = '';
   st.style.left = ''; st.style.top = '';
   st.style.right = ''; st.style.bottom = '';
   st.style.width = ''; st.style.height = '';
   st.style.transform = '';
-  if (deck) deck.style.removeProperty('--disc');
+  if (pl) pl.style.removeProperty('--disc');
 }
 
 /* 画布尺寸交给 CSS 过渡。这条过渡由合成器推进，不依赖窗口 resize 触发的重排，
@@ -986,12 +989,18 @@ async function enterImmersive(dur){
   document.body.classList.add('immersive');
   void st && st.offsetWidth;
 
+  /* 数一下这段过渡实际画了多少帧。这个数直接决定观感：
+     帧数太少再好的缓动也是台阶，写进日志方便以后排查。 */
+  __immFrames = 0; __immT0 = performance.now();
+  (function tick(){ __immFrames++; if (performance.now() - __immT0 < dur + 80) requestAnimationFrame(tick); })();
+
   await Promise.all([
     sizeStage(st, tw, th, dur),
     tweenDisc(st, stagePrev.w, tw, disc0, disc1, dur)
   ]);
   unpinStage(st);
   backdropSet(0);          // 画布已经铺满，这一下也看不见
+  logBoot('imm: enter ' + __immFrames + 'f/' + Math.round(performance.now() - __immT0) + 'ms');
 }
 
 async function exitImmersive(dur){
@@ -1023,7 +1032,7 @@ async function setImmersive(on){
   if (on === immersive || immersiveBusy) return;
   immersiveBusy = true;
   const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端才需要这套
-  const dur = reduceMotion() ? 0 : 460;
+  const dur = reduceMotion() ? 0 : 560;
   try {
     immersive = on;
     const b = $('immersiveBtn');
