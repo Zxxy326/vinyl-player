@@ -210,7 +210,7 @@
      左右零件是挂在 .deck 下沿上（bottom 反推）的，跟着唱片一起走，相对位置不变；
      .deck 矮了 35px，右栏就多出 35px，标题和歌词都能松一口气 */
   .deck{
-    --disc:min(calc(38 * var(--vh1, 1vh)), calc(72 * var(--vw1, 1vw)));
+    --disc:min(38vh,72vw);
     padding-top:clamp(8px,2.8vh,24px);
     /* 唱片抬起来以后，零件和面板内容离唱片太近了。
        这里只加下内边距：.deck 的高度是 auto，内容盒仍是唱片那么大，
@@ -306,7 +306,7 @@
 
 /* 超窄竖屏（小屏手机）再收一档 */
 @media (orientation:portrait) and (max-height:680px){
-  .deck{--disc:min(calc(34 * var(--vh1, 1vh)), calc(62 * var(--vw1, 1vw)))}
+  .deck{--disc:min(34vh,62vw)}
   .title{font-size:19px}
   .artist{display:none}
   .credit{display:none}
@@ -324,7 +324,7 @@
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
-  .deck{--disc:min(calc(80 * var(--vh1, 1vh)), calc(34 * var(--vw1, 1vw)))}
+  .deck{--disc:min(80vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
   .credit{display:none}
@@ -347,7 +347,7 @@
 
 /* 平板 / 中等宽度：两栏但收紧 */
 @media (min-width:1001px) and (max-width:1240px){
-  .deck{--disc:min(calc(70 * var(--vh1, 1vh)), calc(38 * var(--vw1, 1vw)))}
+  .deck{--disc:min(70vh,38vw)}
   .title{font-size:clamp(28px,3.6vw,42px)}
 }
 

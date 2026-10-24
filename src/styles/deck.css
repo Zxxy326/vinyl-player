@@ -1,6 +1,6 @@
 /* ============ 左：唱机 ============ */
 .deck{
-  --disc:min(calc(74 * var(--vh1, 1vh)), calc(41 * var(--vw1, 1vw)));
+  --disc:min(74vh,41vw);
   position:relative;display:grid;place-items:center;
   container-type:inline-size;
 }

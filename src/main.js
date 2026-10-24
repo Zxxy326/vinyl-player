@@ -836,66 +836,20 @@ function showCtrlBar(){
   }, 2600);
 }
 
-/* 桌面端全屏是原生窗口操作（setFullscreen），窗口边框和尺寸在同一帧里就换掉了，
-   CSS 过渡拦不住 —— 这也是"硬切"的唯一来源：不是布局动画没写，而是布局被换掉了。
-
-   所以不跟窗口抢时间，改成"让内容不动"：
-     进入 —— 先把 .stage 钉成当前尺寸居中（画面完全不变），换完窗口内容还是那么大，
-             周围先露出背景，再把 .stage 连续放大到铺满；
-     退出 —— 反过来，先在幕前把 .stage 连续缩回原窗口大小，再让窗口变回去，
-             窗口落地那一刻内容已经正好是那个尺寸。
-   两个方向都只有"画布在扩张/收缩"，内容本身没有一帧跳变。 */
+/* 沉浸切换的过渡
+   ---------------
+   根子在底层：Windows 的窗口尺寸是「一帧换掉」的，setFullscreen 只有终态。
+   前面试过两种前端补法，都不行：
+     · 盖一层暗幕 —— 窗口一变，WebView 重建渲染表面，正在跑的 CSS 过渡直接被
+       丢弃，真机上根本没出现过暗场（录屏逐帧确认）；
+     · 钉住画布再放大 —— 窗口已经全屏、内容还是旧的那么小，中间半秒画面是空的，
+       比硬切更难看（这次录屏逐帧确认）。
+   所以改成让**窗口自己连续变**：Rust 侧 animate_window 逐帧推 set_bounds，
+   窗口和内容一起长大，中间不会出现"内容比窗口小"的一帧。
+   前端只负责一件事：跨断点时把唱片直径 --disc 连续化。 */
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (_) { return false; } };
 
-/* 等窗口尺寸真的变了（原生全屏是异步的，await 返回时 innerWidth 可能还没跟上） */
-async function waitChanged(prev, ms = 340){
-  const t0 = performance.now();
-  while (innerWidth === prev && performance.now() - t0 < ms) await wait(16);
-}
-
-/* 把 .stage 钉成指定尺寸并居中 —— 和"铺满当前视口"在画面上完全等价 */
-function pinStage(w, h){
-  const st = document.querySelector('.stage');
-  if (!st) return null;
-  st.style.position = 'fixed';
-  st.style.left = '50%'; st.style.top = '50%';
-  st.style.right = 'auto'; st.style.bottom = 'auto';
-  st.style.width = w + 'px'; st.style.height = h + 'px';
-  st.style.transform = 'translate(-50%,-50%)';
-  st.style.transition = 'none';
-  void st.offsetWidth;
-  return st;
-}
-
-function unpinStage(st){
-  if (!st) return;
-  st.style.transition = '';
-  st.style.position = '';
-  st.style.left = ''; st.style.top = '';
-  st.style.right = ''; st.style.bottom = '';
-  st.style.width = ''; st.style.height = '';
-  st.style.transform = '';
-}
-
-/* 宽高连续过渡：内容跟着尺寸逐帧重排，等于自己做了一个窗口放大/缩小动画 */
-async function slideStage(st, w, h, dur){
-  if (!st || !dur) return;
-  st.style.transition = `width ${dur}ms cubic-bezier(.22,.61,.36,1), height ${dur}ms cubic-bezier(.22,.61,.36,1)`;
-  st.style.width = w + 'px';
-  st.style.height = h + 'px';
-  await wait(dur + 20);
-}
-
-/* 唱片尺寸 --disc 是按 vh/vw 算的。窗口一换，vh 立刻变，唱片就会在一帧里
-   从 288 跳到 410 —— 光钉住 .stage 挡不住这个。所以把 vh/vw 换成可插值的
-   --vh1/--vw1：钉住时冻结成原窗口的 px，过渡时再连续放回新视口的值。
-   结束时新值正好等于 1vh，所以释放内联值不会有任何跳变。 */
-const rootEl = document.documentElement;
-
-/* 唱片直径 --disc 是「媒体查询断点 + vh/vw」一起算出来的，比单纯冻结 vh 复杂：
-   1180 宽命中 70vh/38vw，1920 宽换到 74vh/41vw —— 同样冻结 vh，系数一换
-   直径就从 448 跳到 484。所以切换期间干脆把 --disc 钉成 px，自己插值。 */
 function readDisc(){
   const p = document.querySelector('.platter');
   return p ? p.getBoundingClientRect().width : 0;
@@ -903,30 +857,16 @@ function readDisc(){
 
 /* 桌面端 --disc 只有两档系数（见 app.css）：
    1001–1240 宽用 70vh/38vw，其余用 74vh/41vw。
-   退出全屏时要先把唱片缩到"窗口变回去之后该多大"，可那一刻视口还是全屏、
-   量不出来，只能按目标尺寸算。**改了 CSS 断点记得同步这里。** */
+   窗口连续变化时会在中途跨过 1240，系数一换直径就跳，所以动画期间把
+   --disc 钉成 px 自己插值，终点由这个函数算。
+   **改了 CSS 断点记得同步这里。** */
 function discFor(w, h){
   const narrow = w >= 1001 && w <= 1240;
   const kh = narrow ? 70 : 74, kw = narrow ? 38 : 41;
   return Math.min(kh * h / 100, kw * w / 100);
 }
 
-/* 临时放开 --disc 和 vh 冻结，量出"当前视口下该多大"，再立刻钉回 keepPx。
-   全过程在同一个任务里，浏览器不会画出中间态。 */
-function measureDiscFresh(w, h, keepPx){
-  const deck = document.querySelector('.deck');
-  if (!deck) return 0;
-  deck.style.removeProperty('--disc');
-  rootEl.style.removeProperty('--vh1');
-  rootEl.style.removeProperty('--vw1');
-  const v = readDisc();
-  deck.style.setProperty('--disc', keepPx + 'px');
-  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
-  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
-  return v;
-}
-
-/* 逐帧插值 --disc：唱片和画布同步长大，而不是先跳一下再放大 */
+/* 逐帧插值 --disc：唱片跟着窗口一起连续变，而不是中途跳一档 */
 async function tweenDisc(from, to, dur){
   const deck = document.querySelector('.deck');
   if (!deck) return;
@@ -937,33 +877,12 @@ async function tweenDisc(from, to, dur){
   await new Promise((res) => {
     const step = () => {
       const t = Math.min(1, (performance.now() - t0) / dur);
-      const e = 1 - Math.pow(1 - t, 3);   // 和 cubic-bezier(.22,.61,.36,1) 接近
+      const e = 1 - Math.pow(1 - t, 3);   // 和 Rust 侧那条缓动一致
       deck.style.setProperty('--disc', (from + (to - from) * e) + 'px');
       if (t < 1) requestAnimationFrame(step); else res();
     };
     requestAnimationFrame(step);
   });
-}
-
-function freezeViewportUnits(w, h){
-  rootEl.classList.remove('vp-tween');
-  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
-  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
-  void rootEl.offsetWidth;
-}
-
-async function tweenViewportUnits(w, h, dur){
-  if (!dur) return;
-  rootEl.classList.add('vp-tween');
-  rootEl.style.setProperty('--vh1', (h / 100) + 'px');
-  rootEl.style.setProperty('--vw1', (w / 100) + 'px');
-  await wait(dur + 20);
-}
-
-function releaseViewportUnits(){
-  rootEl.classList.remove('vp-tween');
-  rootEl.style.removeProperty('--vh1');
-  rootEl.style.removeProperty('--vw1');
 }
 
 let immersiveBusy = false;
@@ -982,27 +901,22 @@ async function setImmersive(on){
 
     if (on){
       if (soft){
-        const w = win();
-        const w0 = innerWidth, h0 = innerHeight;
+        // 先存一份当前窗口几何，退出时缩回去
+        const geo = await invoke('window_geometry').catch(() => null);
+        const scr = await invoke('screen_geometry').catch(() => null);
+        if (!geo || !scr) throw new Error('window geometry unavailable');
+        stagePrev = { w: geo[0], h: geo[1], x: geo[2], y: geo[3] };
         const disc0 = readDisc();
-        const st = pinStage(w0, h0);      // 先钉住：这一帧画面看不出任何变化
-        freezeViewportUnits(w0, h0);      // 视口单位也冻住
+        const disc1 = discFor(scr[0], scr[1]);
         const deck = document.querySelector('.deck');
-        if (deck) deck.style.setProperty('--disc', disc0 + 'px');   // 免疫断点换档
-        stagePrev = { w: w0, h: h0 };
-        if (w){ try { await w.setFullscreen(true); } catch (_) {} }
-        await waitChanged(w0);            // 等窗口真的变全屏
-        const w1 = innerWidth, h1 = innerHeight;
-        const disc1 = measureDiscFresh(w1, h1, disc0);
+        // 铺满屏幕后靠置顶压住任务栏
+        await invoke('set_topmost', { on: true }).catch(() => {});
         document.body.classList.toggle('immersive', true);
-        // 画布、唱片、视口单位三条线同步连续放大到铺满
+        // 窗口和唱片同时连续变 —— 谁都不等谁，中间不会出现空画面
         await Promise.all([
-          slideStage(st, w1, h1, dur),
-          tweenDisc(disc0, disc1, dur),
-          tweenViewportUnits(w1, h1, dur)
+          invoke('animate_window', { w: scr[0], h: scr[1], x: 0, y: 0, ms: dur }),
+          tweenDisc(disc0, disc1, dur)
         ]);
-        unpinStage(st);
-        releaseViewportUnits();
         if (deck) deck.style.removeProperty('--disc');
       } else {
         document.body.classList.toggle('immersive', true);
@@ -1020,26 +934,17 @@ async function setImmersive(on){
         : '沉浸播放 · 按 F 或 Esc 退出');
     } else {
       if (soft){
-        const w = win();
-        const fromW = innerWidth, fromH = innerHeight;
+        const back = stagePrev || { w: innerWidth, h: innerHeight, x: 0, y: 0 };
         const disc0 = readDisc();
-        const st = pinStage(fromW, fromH);
-        freezeViewportUnits(fromW, fromH);
-        const deck = document.querySelector('.deck');
-        if (deck) deck.style.setProperty('--disc', disc0 + 'px');
-        // 先在窗口还是全屏的时候缩回原尺寸，窗口落地那一刻内容正好吻合
-        const back = stagePrev || { w: screen.availWidth, h: screen.availHeight };
         const disc1 = discFor(back.w, back.h);
+        const deck = document.querySelector('.deck');
+        document.body.classList.toggle('immersive', false);
         await Promise.all([
-          slideStage(st, back.w, back.h, dur),
-          tweenDisc(disc0, disc1, dur),
-          tweenViewportUnits(back.w, back.h, dur)
+          invoke('animate_window', { w: back.w, h: back.h, x: back.x, y: back.y, ms: dur }),
+          tweenDisc(disc0, disc1, dur)
         ]);
-        if (w){ try { await w.setFullscreen(false); } catch (_) {} }
-        await waitChanged(fromW);
-        unpinStage(st);
-        releaseViewportUnits();
         if (deck) deck.style.removeProperty('--disc');
+        await invoke('set_topmost', { on: false }).catch(() => {});
         stagePrev = null;
       } else {
         if (IS_ANDROID && HAS_ANDROID){

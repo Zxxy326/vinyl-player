@@ -15,17 +15,6 @@
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
-  /* 视口单位的"可过渡版本"。平时就等于 1vh / 1vw；
-     沉浸切换时会被临时钉成固定 px（见 main.js 的 pinStage），
-     这样窗口尺寸跳变的那一刻，唱片尺寸不会跟着跳。
-     注册成 <length> 之后还能被 transition 插值，冻结和恢复都是连续的。 */
-  --vh1:1vh;
-  --vw1:1vw;
-}
-@property --vh1{syntax:'<length>';inherits:true;initial-value:0px}
-@property --vw1{syntax:'<length>';inherits:true;initial-value:0px}
-html.vp-tween{
-  transition:--vh1 .48s cubic-bezier(.22,.61,.36,1), --vw1 .48s cubic-bezier(.22,.61,.36,1);
 }
 html,body{height:100%}
 body{
