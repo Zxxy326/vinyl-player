@@ -151,3 +151,21 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 /* 沉浸播放按钮亮起 */
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
+
+/* ---- 沉浸切换的背景压暗 / 逐渐亮屏 ----
+   窗口变大时，WebView 会先把新区域刷成背景色、再补内容 —— 表现就是
+   "红底先满、内容后到"，而且那片红和黑胶的深色对比太强，看着割裂。
+
+   这一层盖在背景之上、内容之下（z-index:0，.stage 是 1），切换瞬间把背景
+   压成深色，再跟着窗口动画一起亮回来：
+     · 新铺开的区域一开始是暗的，和黑胶同一个色系，不割裂；
+     · 内容层完全不受影响，所以不会像之前的暗场那样"闪黑"；
+     · 压暗和窗口开始变大是同一时刻，感知上就是"展开的同时亮起来"。 */
+#bgDim{
+  position:fixed;top:0;right:0;bottom:0;left:0;
+  z-index:0;
+  pointer-events:none;
+  opacity:0;
+  background:radial-gradient(120% 100% at 50% 45%, #1c0509 0%, #0d0306 55%, #060103 100%);
+  will-change:opacity;
+}

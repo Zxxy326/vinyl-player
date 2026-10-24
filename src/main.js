@@ -886,7 +886,26 @@ async function tweenDisc(from, to, dur){
 }
 
 let immersiveBusy = false;
-let stagePrev = null;   // 进沉浸前的视口尺寸，退出时用它当缩回的终点
+let stagePrev = null;   // 进沉浸前的窗口几何，退出时缩回去
+
+/* 背景压暗 → 逐渐亮起。只动 #bgDim（背景层），内容层完全不受影响，
+   所以不会"闪黑"；压暗那一帧和窗口开始变大是同一时刻，注意力在窗口边缘，
+   感知上就是"展开的同时亮起来"。 */
+function backdropDim(){
+  const el = $('bgDim');
+  if (!el) return null;
+  el.style.transition = 'none';
+  el.style.opacity = '0.78';
+  void el.offsetWidth;      // 让这一帧立即生效，别被下面的过渡合并掉
+  return el;
+}
+
+function backdropFade(el, dur){
+  if (!el) return;
+  // 和窗口动画、唱片插值用同一条曲线，三者才是"一起展开"而不是各走各的
+  el.style.transition = `opacity ${dur}ms cubic-bezier(.22,.61,.36,1)`;
+  el.style.opacity = '0';
+}
 
 async function setImmersive(on){
   // 过渡期间忽略重复触发，否则快速连点会把两次窗口切换叠在一起
@@ -909,14 +928,19 @@ async function setImmersive(on){
         const disc0 = readDisc();
         const disc1 = discFor(scr[0], scr[1]);
         const deck = document.querySelector('.deck');
+        // 先把背景压暗（内容不动），再让窗口开始变大 —— 两件事同一时刻发生
+        const dimEl = backdropDim();
         // 铺满屏幕后靠置顶压住任务栏
         await invoke('set_topmost', { on: true }).catch(() => {});
         document.body.classList.toggle('immersive', true);
-        // 窗口和唱片同时连续变 —— 谁都不等谁，中间不会出现空画面
+        // 窗口变大、唱片放大、背景亮起来，三条线同一条缓动
+        backdropFade(dimEl, dur);
+        const tAnim = performance.now();
         await Promise.all([
           invoke('animate_window', { w: scr[0], h: scr[1], x: 0, y: 0, ms: dur }),
           tweenDisc(disc0, disc1, dur)
         ]);
+        logBoot('imm: animate ' + Math.round(performance.now() - tAnim) + 'ms, viewport ' + innerWidth + 'x' + innerHeight + ', target ' + Math.round(scr[0]) + 'x' + Math.round(scr[1]));
         if (deck) deck.style.removeProperty('--disc');
       } else {
         document.body.classList.toggle('immersive', true);
@@ -960,6 +984,9 @@ async function setImmersive(on){
     }
   } finally {
     immersiveBusy = false;
+    // 兜底：中途出任何岔子，别把背景留在压暗状态
+    const el = $('bgDim');
+    if (el && el.style.opacity && el.style.opacity !== '0') el.style.opacity = '0';
   }
 }
 

@@ -43,6 +43,11 @@ setTimeout(function(){
   </div>
 </div>
 
+<!-- 沉浸切换时只压暗背景：窗口变大那一刻，新铺开的区域先被它盖成深色，
+     然后跟着窗口一起亮起来。内容层不受影响，所以不会出现"闪黑"。
+     详见 chrome.css 的 #bgDim 与 main.js 的 dimBackdrop。 -->
+<div id="bgDim" aria-hidden="true"></div>
+
 <div class="stage">
 
   <!-- ================= 左：黑胶唱机 ================= -->
