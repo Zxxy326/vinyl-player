@@ -836,40 +836,80 @@ function showCtrlBar(){
   }, 2600);
 }
 
-async function setImmersive(on){
-  if (on === immersive) return;
-  immersive = on;
-  document.body.classList.toggle('immersive', on);
-  const b = $('immersiveBtn');
-  if (b) b.setAttribute('aria-pressed', String(on));
+/* 桌面端全屏是原生窗口操作（setFullscreen），窗口边框和尺寸在同一帧里
+   就换掉了，CSS 完全插不上手 —— 光调布局过渡，露出来那一瞬还是硬切。
+   所以这里"暗场换景"：先拉幕，幕后面换窗口 + 跑布局过渡，落定了再揭幕。
+   观众看到的是连续的暗→亮，中间那一帧跳变藏在幕底下。 */
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (_) { return false; } };
 
-  if (on){
-    if (IS_DESKTOP && TAURI_WIN){
-      const w = win();
-      if (w){ try { await w.setFullscreen(true); } catch (_) {} }
-    } else if (IS_ANDROID && HAS_ANDROID){
-      try { acall('hideStatusBar', { on: true }); } catch (_) {}
-    } else if (document.documentElement.requestFullscreen){
-      try { await document.documentElement.requestFullscreen(); } catch (_) {}
+function veil(on){
+  const v = $('fxVeil');
+  if (!v) return Promise.resolve();
+  // 暗下去快、亮起来慢：进场干脆，出场柔和
+  const dur = reduceMotion() ? 0 : (on ? 170 : 380);
+  v.style.transitionDuration = dur + 'ms';
+  v.style.opacity = on ? '1' : '0';
+  v.classList.toggle('is-on', on);
+  return wait(dur);
+}
+
+let immersiveBusy = false;
+
+async function setImmersive(on){
+  // 过渡期间忽略重复触发，否则快速连点会把两次窗口切换叠在一起
+  if (on === immersive || immersiveBusy) return;
+  immersiveBusy = true;
+  const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端需要幕
+  try {
+    immersive = on;
+    const b = $('immersiveBtn');
+    if (b) b.setAttribute('aria-pressed', String(on));
+
+    if (soft) await veil(true);           // 先暗场，下面所有变化都在幕后发生
+
+    document.body.classList.toggle('immersive', on);
+
+    if (on){
+      if (soft){
+        const w = win();
+        if (w){ try { await w.setFullscreen(true); } catch (_) {} }
+      } else if (IS_ANDROID && HAS_ANDROID){
+        try { acall('hideStatusBar', { on: true }); } catch (_) {}
+      } else if (document.documentElement.requestFullscreen){
+        try { await document.documentElement.requestFullscreen(); } catch (_) {}
+      }
+      await keepAwake(true);
+    } else {
+      if (soft){
+        const w = win();
+        if (w){ try { await w.setFullscreen(false); } catch (_) {} }
+      } else if (IS_ANDROID && HAS_ANDROID){
+        try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
+      } else if (document.fullscreenElement && document.exitFullscreen){
+        try { await document.exitFullscreen(); } catch (_) {}
+      }
+      await keepAwake(false);
+      clearTimeout(ctrlTimer);
+      document.body.classList.remove('ctrl-hidden');
     }
-    await keepAwake(true);
-    showCtrlBar();
-    // 手机上没有键盘，别提示快捷键
-    toast(IS_ANDROID || matchMedia('(hover:none)').matches
-      ? '沉浸播放 · 再点一次退出'
-      : '沉浸播放 · 按 F 或 Esc 退出');
-  } else {
-    if (IS_DESKTOP && TAURI_WIN){
-      const w = win();
-      if (w){ try { await w.setFullscreen(false); } catch (_) {} }
-    } else if (IS_ANDROID && HAS_ANDROID){
-      try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
-    } else if (document.fullscreenElement && document.exitFullscreen){
-      try { await document.exitFullscreen(); } catch (_) {}
+
+    if (soft){
+      // 窗口尺寸落定再揭幕，否则幕揭开时画面还在动；
+      // 这段等待也让 .panel 的 padding 过渡（.42s）走完大半
+      await wait(120);
+      await veil(false);
     }
-    await keepAwake(false);
-    clearTimeout(ctrlTimer);
-    document.body.classList.remove('ctrl-hidden');
+
+    if (on){
+      showCtrlBar();
+      // 手机上没有键盘，别提示快捷键
+      toast(IS_ANDROID || matchMedia('(hover:none)').matches
+        ? '沉浸播放 · 再点一次退出'
+        : '沉浸播放 · 按 F 或 Esc 退出');
+    }
+  } finally {
+    immersiveBusy = false;
   }
 }
 
@@ -952,10 +992,24 @@ if (!IS_ANDROID){
    高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。 */
 const ctrlEl = document.querySelector('.controls');
 if (ctrlEl){
-  const pushCtrlH = () => {
-    document.documentElement.style.setProperty('--ctrl-h', ctrlEl.offsetHeight + 'px');
+  let ctrlLast = -1, ctrlRaf = 0;
+  const setCtrlH = (h) => {
+    if (h === ctrlLast) return;
+    ctrlLast = h;
+    document.documentElement.style.setProperty('--ctrl-h', h + 'px');
   };
-  pushCtrlH();
+  // 首帧同步量一次，别让面板用默认留白闪一下
+  setCtrlH(ctrlEl.offsetHeight);
+  /* 之后走 rAF 合流 + 值比较：窗口剧变时 RO 和 resize 会在同一帧里连进来，
+     回调里同步读 offsetHeight 会强制布局，一轮改一轮，正好是浏览器报
+     "ResizeObserver loop completed with undelivered notifications" 的成因。 */
+  const pushCtrlH = () => {
+    if (ctrlRaf) return;
+    ctrlRaf = requestAnimationFrame(() => {
+      ctrlRaf = 0;
+      setCtrlH(ctrlEl.offsetHeight);
+    });
+  };
   if (window.ResizeObserver) new ResizeObserver(pushCtrlH).observe(ctrlEl);
 }
 
@@ -1286,10 +1340,16 @@ function logBoot(msg){
 }
 
 window.addEventListener('error', (e) => {
-  const msg = 'JS ERROR: ' + (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0);
+  const raw = e.message || '';
+  /* ResizeObserver 的这条不是真错误：浏览器在同一帧里 RO 回调改了尺寸、
+     新一轮通知还没投递完时会发这个警告，属于框架层噪音。WebView2 在
+     全屏切换、窗口拉伸这种尺寸剧变时尤其容易触发 —— 以前它被当成脚本
+     异常，在曲库为空时直接弹成 toast，看着像崩了，其实什么都没坏。 */
+  if (/ResizeObserver loop/i.test(raw)) return;
+  const msg = 'JS ERROR: ' + raw + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0);
   logBoot(msg);
   document.title = msg;
-  if (S.tracks.length === 0) toast('出错了：' + (e.message || '脚本异常'));
+  if (S.tracks.length === 0) toast('出错了：' + (raw || '脚本异常'));
 });
 
 window.addEventListener('unhandledrejection', (e) => {

@@ -28,7 +28,12 @@ export class Spectrum {
   size(){
     const r = this.wrap.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    this.dpr = Math.min(this.low ? 1.5 : 2, window.devicePixelRatio || 1);
+    const dpr = Math.min(this.low ? 1.5 : 2, window.devicePixelRatio || 1);
+    /* 尺寸没变就别重设 canvas.width/height：赋值会清空画布、也会让
+       ResizeObserver 多跑一轮。窗口剧变时 RO 和 resize 会同时进来，
+       这里短路掉能少一次"回调里改尺寸"的嵌套。 */
+    if (Math.abs(r.width - this.w) < 0.5 && Math.abs(r.height - this.h) < 0.5 && dpr === this.dpr) return;
+    this.dpr = dpr;
     this.w = r.width; this.h = r.height;
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
