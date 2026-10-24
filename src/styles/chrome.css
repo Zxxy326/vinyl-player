@@ -10,6 +10,8 @@
   padding:0 12px;
   background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
   -webkit-user-select:none;user-select:none;
+  /* 沉浸切换时标题栏是淡出的：没有过渡的话，它会在窗口跳全屏那一帧突然消失 */
+  transition:opacity .2s var(--ease);
 }
 body.is-desktop .titlebar{display:flex}
 /* 标题栏高度也当成"顶部安全区"，让 .stage 自己让开 */
@@ -152,20 +154,20 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
 
-/* ---- 沉浸切换的背景压暗 / 逐渐亮屏 ----
-   窗口变大时，WebView 会先把新区域刷成背景色、再补内容 —— 表现就是
-   "红底先满、内容后到"，而且那片红和黑胶的深色对比太强，看着割裂。
+/* ---- 沉浸切换的"深色围边" ----
+   这一层不是暗场幕，是**围边**：它只负责盖住"画布之外那一圈"。
+   切换的结构是「窗口先一帧跳到全屏 → 画布再从原尺寸长满全屏」，所以在画布
+   长满之前，屏幕边上一定会露出一圈东西。以前那一圈是 body 的红底，红底和
+   黑胶的深色对比太强，看着就是"红底先铺满、内容后到"，很割裂。
+   现在这一圈是深色，而且和黑胶同一个色系，于是整个过渡读起来是
+   "应用接管了屏幕 → 播放器从中间展开"。
 
-   这一层盖在背景之上、内容之下（z-index:0，.stage 是 1），切换瞬间把背景
-   压成深色，再跟着窗口动画一起亮回来：
-     · 新铺开的区域一开始是暗的，和黑胶同一个色系，不割裂；
-     · 内容层完全不受影响，所以不会像之前的暗场那样"闪黑"；
-     · 压暗和窗口开始变大是同一时刻，感知上就是"展开的同时亮起来"。 */
+   它只在窗口**不变化**的时刻开/关（跳全屏前一刻开、画布铺满后一刻关），
+   所以不会被 resize 打断 —— 之前那版暗场幕就是死在"过渡跨过了 resize"上。 */
 #bgDim{
   position:fixed;top:0;right:0;bottom:0;left:0;
   z-index:0;
   pointer-events:none;
   opacity:0;
   background:radial-gradient(120% 100% at 50% 45%, #1c0509 0%, #0d0306 55%, #060103 100%);
-  will-change:opacity;
 }

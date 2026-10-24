@@ -43,9 +43,10 @@ setTimeout(function(){
   </div>
 </div>
 
-<!-- 沉浸切换时只压暗背景：窗口变大那一刻，新铺开的区域先被它盖成深色，
-     然后跟着窗口一起亮起来。内容层不受影响，所以不会出现"闪黑"。
-     详见 chrome.css 的 #bgDim 与 main.js 的 dimBackdrop。 -->
+<!-- 沉浸切换时画布之外那一圈用深色兜住（不是暗场幕）。
+     结构是「窗口先一帧跳全屏 → 画布再从原尺寸长满」，所以画布长满之前边上
+     一定会露出一圈；以前露的是红底，跟黑胶的深色对比太强，看着就是
+     "红底先铺满、内容后到"。详见 chrome.css 的 #bgDim 与 main.js 的 enterImmersive。 -->
 <div id="bgDim" aria-hidden="true"></div>
 
 <div class="stage">

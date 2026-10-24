@@ -191,82 +191,21 @@ fn log_line(msg: String) {
     }
 }
 
-/// 窗口几何动画：让原生窗口自己连续长大/缩小。
+/// 真全屏（不是"最大化"）：铺满整块显示器、盖住任务栏。
 ///
-/// 为什么必须放到 Rust 里做：Windows 的窗口尺寸是「一帧换掉」的，
-/// setFullscreen / setSize 都只有终态。前端拿 CSS 怎么补，都会留下
-/// 「窗口已经变大、内容还没长满」的空档 —— 真机录屏逐帧看，那半秒
-/// 画面是空的，比硬切还难看。这里用 ~60fps 逐帧推 set_bounds，
-/// 窗口和内容一起连续变，中间不会出现内容比窗口小的一帧。
+/// 为什么沉浸切换现在只剩这一条窗口命令：
+/// Windows 的窗口尺寸只有终态，任何"逐帧推窗口"的做法都会让 WebView2 在
+/// 每一帧重建渲染表面 —— 正在跑的 CSS 过渡被直接丢弃、重排还会晚一两帧，
+/// 真机录屏逐帧看就是「红底先铺满、内容后到」，比硬切更难看。
+///
+/// 所以这一版**不让窗口参与过渡**：窗口一帧跳到位，跳的那一帧屏幕上已经
+/// 被"原尺寸画布 + 深色围边"占住（看起来就是应用接管了屏幕），之后窗口
+/// 不再变化，纯在页面里把画布从原尺寸长到全屏。过渡期间一次 resize 都没有，
+/// 于是不存在"过渡被 resize 打断"这回事。见 main.js 的 enterImmersive。
 #[tauri::command]
-async fn animate_window(app: tauri::AppHandle, w: f64, h: f64, x: f64, y: f64, ms: u64) -> Result<(), String> {
-    /* 必须丢到阻塞线程池：同步命令是在主线程上跑的，这里每帧 sleep 12ms，
-       放在主线程会把窗口消息循环堵死半秒 —— 那窗口反而会假死。
-       挪出来以后主线程只负责真正执行 set_size，动画期间照常响应。 */
-    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        let win = app.get_webview_window("main").ok_or("no main window")?;
-        let sf = win.scale_factor().map_err(|e| e.to_string())?;
-        let cur = win.outer_size().map_err(|e| e.to_string())?;
-        let w0 = cur.width as f64 / sf;
-        let h0 = cur.height as f64 / sf;
-
-        let dur = (ms as f64 / 1000.0).max(0.001);
-        let t0 = std::time::Instant::now();
-        loop {
-            let t = (t0.elapsed().as_secs_f64() / dur).min(1.0);
-            // ease-out cubic，和前端那套缓动对齐
-            let e = 1.0 - (1.0 - t).powi(3);
-            let cw = w0 + (w - w0) * e;
-            let ch = h0 + (h - h0) * e;
-            // 动画过程中始终居中于目标矩形，放大/缩小都是对称展开
-            let cx = x + (w - cw) / 2.0;
-            let cy = y + (h - ch) / 2.0;
-            let _ = win.set_size(tauri::LogicalSize::new(cw, ch));
-            let _ = win.set_position(tauri::LogicalPosition::new(cx, cy));
-            if t >= 1.0 {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(12));
-        }
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-/// 当前窗口的 (宽, 高, x, y)，逻辑像素。进沉浸前存一份，退出时缩回去。
-#[tauri::command]
-fn window_geometry(app: tauri::AppHandle) -> Result<(f64, f64, f64, f64), String> {
+fn set_fullscreen(app: tauri::AppHandle, on: bool) -> Result<(), String> {
     let win = app.get_webview_window("main").ok_or("no main window")?;
-    let sf = win.scale_factor().map_err(|e| e.to_string())?;
-    let sz = win.outer_size().map_err(|e| e.to_string())?;
-    let pos = win.outer_position().map_err(|e| e.to_string())?;
-    Ok((
-        sz.width as f64 / sf,
-        sz.height as f64 / sf,
-        pos.x as f64 / sf,
-        pos.y as f64 / sf,
-    ))
-}
-
-/// 当前显示器的 (宽, 高)，逻辑像素 —— 沉浸模式要铺满它
-#[tauri::command]
-fn screen_geometry(app: tauri::AppHandle) -> Result<(f64, f64), String> {
-    let win = app.get_webview_window("main").ok_or("no main window")?;
-    let sf = win.scale_factor().map_err(|e| e.to_string())?;
-    let mon = win
-        .current_monitor()
-        .map_err(|e| e.to_string())?
-        .ok_or("no monitor")?;
-    let s = mon.size();
-    Ok((s.width as f64 / sf, s.height as f64 / sf))
-}
-
-/// 置顶：铺满屏幕后要靠它压住任务栏，退出时还原
-#[tauri::command]
-fn set_topmost(app: tauri::AppHandle, on: bool) -> Result<(), String> {
-    let win = app.get_webview_window("main").ok_or("no main window")?;
-    win.set_always_on_top(on).map_err(|e| e.to_string())
+    win.set_fullscreen(on).map_err(|e| e.to_string())
 }
 
 /// 不引第三方依赖的最小 base64（封面用）
@@ -329,10 +268,7 @@ pub fn run() {
             resolve_close,
             keep_awake,
             frontend_ready,
-            animate_window,
-            window_geometry,
-            screen_geometry,
-            set_topmost
+            set_fullscreen
         ])
         .setup(move |app| {
             // 已经运行的实例收到第二个实例的消息后，把窗口叫回前台

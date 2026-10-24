@@ -836,19 +836,29 @@ function showCtrlBar(){
   }, 2600);
 }
 
-/* 沉浸切换的过渡
-   ---------------
-   根子在底层：Windows 的窗口尺寸是「一帧换掉」的，setFullscreen 只有终态。
-   前面试过两种前端补法，都不行：
-     · 盖一层暗幕 —— 窗口一变，WebView 重建渲染表面，正在跑的 CSS 过渡直接被
-       丢弃，真机上根本没出现过暗场（录屏逐帧确认）；
-     · 钉住画布再放大 —— 窗口已经全屏、内容还是旧的那么小，中间半秒画面是空的，
-       比硬切更难看（这次录屏逐帧确认）。
-   所以改成让**窗口自己连续变**：Rust 侧 animate_window 逐帧推 set_bounds，
-   窗口和内容一起长大，中间不会出现"内容比窗口小"的一帧。
-   前端只负责一件事：跨断点时把唱片直径 --disc 连续化。 */
+/* 沉浸切换
+   =========
+   这里踩过三个坑，结论写在最前面：
+     ① Windows 的窗口尺寸只有终态 —— setFullscreen / setSize 都是"一帧换掉"；
+     ② WebView2 在窗口尺寸变化的那些帧里要重建渲染表面，正在跑的 CSS 过渡会被
+        直接丢弃（CDP 里 opacity 0→1 跑得好好的，真机录屏逐帧看一帧都没有）；
+     ③ 重排也晚一两帧，于是窗口先变大、内容后长满，中间那半秒画面是空的。
+   只要"过渡"和"resize"在时间上重叠，①②③ 就会同时发作 —— 这就是前几版
+   怎么调都生硬的根本原因，不是参数问题。
+
+   所以这一版把两件事**在时间上彻底拆开**：
+     ① 先把画布钉成当前尺寸居中，围边压成深色 —— 这一帧画面完全没变；
+     ② 窗口一帧跳到全屏。此刻屏幕上是"原尺寸的播放器 + 深色围边"，
+        读起来是"应用接管了屏幕"，而不是"窗口突然变大"；
+     ③ 窗口从此不再变化，纯在页面里把画布从原尺寸长到全屏，唱片同步插值。
+   ③ 期间一次 resize 都没有，CSS 过渡不会被丢弃，也没有重排要追 ——
+   顺滑是这个结构本身保证的，不靠调参。 */
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+/* 双 rAF = 等这一帧真的画出来再往下走 */
+const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (_) { return false; } };
+/* 画布尺寸、唱片直径、围边统一用这一条曲线，才是"一起展开"而不是各走各的 */
+const IMM_EASE = 'cubic-bezier(.22,.61,.36,1)';
 
 function readDisc(){
   const p = document.querySelector('.platter');
@@ -857,8 +867,7 @@ function readDisc(){
 
 /* 桌面端 --disc 只有两档系数（见 app.css）：
    1001–1240 宽用 70vh/38vw，其余用 74vh/41vw。
-   窗口连续变化时会在中途跨过 1240，系数一换直径就跳，所以动画期间把
-   --disc 钉成 px 自己插值，终点由这个函数算。
+   过渡期间画布尺寸和视口脱钩了（视口已经是全屏的），所以终点直径要自己算。
    **改了 CSS 断点记得同步这里。** */
 function discFor(w, h){
   const narrow = w >= 1001 && w <= 1240;
@@ -866,45 +875,147 @@ function discFor(w, h){
   return Math.min(kh * h / 100, kw * w / 100);
 }
 
-/* 逐帧插值 --disc：唱片跟着窗口一起连续变，而不是中途跳一档 */
-async function tweenDisc(from, to, dur){
+/* 唱片直径**跟着画布走**，不另起一条计时器。
+   画布的尺寸是 CSS 过渡在推的，它每一帧的真实进度只有量出来才知道；跟着它走，
+   两者在任何一帧的比例都是对的 —— 不会出现"唱片先长、画布后到"（实测两条独立
+   计时器会差半帧到 50ms，那一小段唱片明显偏大）。
+   兜底：过渡万一被丢弃、进度一直不动，就按时间强行收尾，别把循环卡死。 */
+async function tweenDisc(st, w0, w1, d0, d1, dur){
   const deck = document.querySelector('.deck');
   if (!deck) return;
-  deck.style.setProperty('--disc', from + 'px');
-  if (!dur || !from || !to || Math.abs(to - from) < 0.5) return;
-  void deck.offsetWidth;
+  if (!dur){ deck.style.setProperty('--disc', d1 + 'px'); return; }
+  deck.style.setProperty('--disc', d0 + 'px');
   const t0 = performance.now();
   await new Promise((res) => {
     const step = () => {
-      const t = Math.min(1, (performance.now() - t0) / dur);
-      const e = 1 - Math.pow(1 - t, 3);   // 和 Rust 侧那条缓动一致
-      deck.style.setProperty('--disc', (from + (to - from) * e) + 'px');
-      if (t < 1) requestAnimationFrame(step); else res();
+      const cw = st ? st.getBoundingClientRect().width : w1;
+      let p = w1 === w0 ? 1 : (cw - w0) / (w1 - w0);
+      p = Math.min(1, Math.max(0, p));
+      if (performance.now() - t0 > dur * 2) p = 1;
+      deck.style.setProperty('--disc', (d0 + (d1 - d0) * p) + 'px');
+      if (p < 1) requestAnimationFrame(step); else res();
     };
     requestAnimationFrame(step);
   });
 }
 
 let immersiveBusy = false;
-let stagePrev = null;   // 进沉浸前的窗口几何，退出时缩回去
+let stagePrev = null;   // 进沉浸前的视口尺寸，退出时缩回去
 
-/* 背景压暗 → 逐渐亮起。只动 #bgDim（背景层），内容层完全不受影响，
-   所以不会"闪黑"；压暗那一帧和窗口开始变大是同一时刻，注意力在窗口边缘，
-   感知上就是"展开的同时亮起来"。 */
-function backdropDim(){
+/* 把 .stage 钉成指定 px 尺寸并居中。
+   必须用 px：过渡期间视口已经是全屏的，vh/vw 给的是全屏尺寸，钉不住。 */
+function pinStage(w, h, disc){
+  const st = document.querySelector('.stage');
+  if (!st) return null;
+  const deck = document.querySelector('.deck');
+  st.style.transition = 'none';
+  st.style.position = 'fixed';
+  st.style.left = '50%'; st.style.top = '50%';
+  st.style.right = 'auto'; st.style.bottom = 'auto';
+  st.style.width = w + 'px'; st.style.height = h + 'px';
+  st.style.transform = 'translate(-50%,-50%)';
+  if (deck && disc > 0) deck.style.setProperty('--disc', disc + 'px');
+  void st.offsetWidth;
+  return st;
+}
+
+function unpinStage(st){
+  if (!st) return;
+  const deck = document.querySelector('.deck');
+  st.style.transition = '';
+  st.style.position = '';
+  st.style.left = ''; st.style.top = '';
+  st.style.right = ''; st.style.bottom = '';
+  st.style.width = ''; st.style.height = '';
+  st.style.transform = '';
+  if (deck) deck.style.removeProperty('--disc');
+}
+
+/* 画布尺寸交给 CSS 过渡。这条过渡由合成器推进，不依赖窗口 resize 触发的重排，
+   所以主线程再忙，画面也是连续的。 */
+async function sizeStage(st, w, h, dur){
+  if (!st) return;
+  if (!dur){
+    st.style.width = w + 'px'; st.style.height = h + 'px';
+    return;
+  }
+  st.style.transition = `width ${dur}ms ${IMM_EASE}, height ${dur}ms ${IMM_EASE}`;
+  st.style.width = w + 'px';
+  st.style.height = h + 'px';
+  await wait(dur + 40);
+}
+
+/* 深色围边：画布之外那一圈。它只在"画布还没铺满"的时候露出来，
+   所以只要它是深色，就不会出现"红底先铺满"的割裂感。
+   这一层只动 opacity，而且只在窗口**不变化**的时候开关，所以不会被 resize 打断。 */
+function backdropSet(v){
   const el = $('bgDim');
   if (!el) return null;
   el.style.transition = 'none';
-  el.style.opacity = '0.78';
-  void el.offsetWidth;      // 让这一帧立即生效，别被下面的过渡合并掉
+  el.style.opacity = String(v);
+  void el.offsetWidth;
   return el;
 }
 
-function backdropFade(el, dur){
-  if (!el) return;
-  // 和窗口动画、唱片插值用同一条曲线，三者才是"一起展开"而不是各走各的
-  el.style.transition = `opacity ${dur}ms cubic-bezier(.22,.61,.36,1)`;
-  el.style.opacity = '0';
+/* 跳全屏之后 WebView2 不一定在同一帧就把 innerWidth 更新掉，等它一下 */
+async function viewportChanged(w0, h0){
+  for (let i = 0; i < 20; i++){
+    await new Promise((r) => requestAnimationFrame(r));
+    if (innerWidth !== w0 || innerHeight !== h0){ await frame(); return; }
+  }
+}
+
+async function enterImmersive(dur){
+  stagePrev = { w: innerWidth, h: innerHeight };
+  const disc0 = readDisc();
+  const st = pinStage(stagePrev.w, stagePrev.h, disc0);
+  backdropSet(1);          // 画布此刻还铺满整个窗口，这一下完全看不见
+  await frame();           // 让"钉住"这一帧先上屏，再去跳窗口
+
+  const w0 = innerWidth, h0 = innerHeight;
+  await invoke('set_fullscreen', { on: true }).catch(() => {});
+  await viewportChanged(w0, h0);
+  /* 再多等两帧：全屏有时分两趟把窗口撑开，第二趟如果落在过渡开始之后，
+     过渡会被那次 resize 打断。40ms 看不出来，但能挡掉这一趟。 */
+  await wait(40);
+
+  const tw = innerWidth, th = innerHeight;
+  const disc1 = discFor(tw, th);
+  /* 标题栏淡出、安全区让位。放在跳全屏之后：这点位移和"接管屏幕"同一帧，
+     看不出来；放在之前反而会在窗口还没变大时先跳一下。 */
+  document.body.classList.add('immersive');
+  void st && st.offsetWidth;
+
+  await Promise.all([
+    sizeStage(st, tw, th, dur),
+    tweenDisc(st, stagePrev.w, tw, disc0, disc1, dur)
+  ]);
+  unpinStage(st);
+  backdropSet(0);          // 画布已经铺满，这一下也看不见
+}
+
+async function exitImmersive(dur){
+  const back = stagePrev || { w: innerWidth, h: innerHeight };
+  const fw = innerWidth;
+  const disc0 = readDisc();
+  const disc1 = discFor(back.w, back.h);
+  const st = pinStage(innerWidth, innerHeight, disc0);   // 钉成当前全屏尺寸，画面不变
+  backdropSet(1);                                        // 围边深色，此刻还看不见
+  await frame();
+
+  await Promise.all([
+    sizeStage(st, back.w, back.h, dur),
+    tweenDisc(st, fw, back.w, disc0, disc1, dur)
+  ]);
+
+  const w0 = innerWidth, h0 = innerHeight;
+  await invoke('set_fullscreen', { on: false }).catch(() => {});
+  await viewportChanged(w0, h0);
+
+  document.body.classList.remove('immersive');   // 标题栏在正常窗口尺寸下才淡回来
+  unpinStage(st);
+  backdropSet(0);
+  stagePrev = null;
 }
 
 async function setImmersive(on){
@@ -912,7 +1023,7 @@ async function setImmersive(on){
   if (on === immersive || immersiveBusy) return;
   immersiveBusy = true;
   const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端才需要这套
-  const dur = reduceMotion() ? 0 : 480;
+  const dur = reduceMotion() ? 0 : 460;
   try {
     immersive = on;
     const b = $('immersiveBtn');
@@ -920,28 +1031,7 @@ async function setImmersive(on){
 
     if (on){
       if (soft){
-        // 先存一份当前窗口几何，退出时缩回去
-        const geo = await invoke('window_geometry').catch(() => null);
-        const scr = await invoke('screen_geometry').catch(() => null);
-        if (!geo || !scr) throw new Error('window geometry unavailable');
-        stagePrev = { w: geo[0], h: geo[1], x: geo[2], y: geo[3] };
-        const disc0 = readDisc();
-        const disc1 = discFor(scr[0], scr[1]);
-        const deck = document.querySelector('.deck');
-        // 先把背景压暗（内容不动），再让窗口开始变大 —— 两件事同一时刻发生
-        const dimEl = backdropDim();
-        // 铺满屏幕后靠置顶压住任务栏
-        await invoke('set_topmost', { on: true }).catch(() => {});
-        document.body.classList.toggle('immersive', true);
-        // 窗口变大、唱片放大、背景亮起来，三条线同一条缓动
-        backdropFade(dimEl, dur);
-        const tAnim = performance.now();
-        await Promise.all([
-          invoke('animate_window', { w: scr[0], h: scr[1], x: 0, y: 0, ms: dur }),
-          tweenDisc(disc0, disc1, dur)
-        ]);
-        logBoot('imm: animate ' + Math.round(performance.now() - tAnim) + 'ms, viewport ' + innerWidth + 'x' + innerHeight + ', target ' + Math.round(scr[0]) + 'x' + Math.round(scr[1]));
-        if (deck) deck.style.removeProperty('--disc');
+        await enterImmersive(dur);
       } else {
         document.body.classList.toggle('immersive', true);
         if (IS_ANDROID && HAS_ANDROID){
@@ -958,18 +1048,7 @@ async function setImmersive(on){
         : '沉浸播放 · 按 F 或 Esc 退出');
     } else {
       if (soft){
-        const back = stagePrev || { w: innerWidth, h: innerHeight, x: 0, y: 0 };
-        const disc0 = readDisc();
-        const disc1 = discFor(back.w, back.h);
-        const deck = document.querySelector('.deck');
-        document.body.classList.toggle('immersive', false);
-        await Promise.all([
-          invoke('animate_window', { w: back.w, h: back.h, x: back.x, y: back.y, ms: dur }),
-          tweenDisc(disc0, disc1, dur)
-        ]);
-        if (deck) deck.style.removeProperty('--disc');
-        await invoke('set_topmost', { on: false }).catch(() => {});
-        stagePrev = null;
+        await exitImmersive(dur);
       } else {
         if (IS_ANDROID && HAS_ANDROID){
           try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
@@ -982,9 +1061,15 @@ async function setImmersive(on){
       clearTimeout(ctrlTimer);
       document.body.classList.remove('ctrl-hidden');
     }
+  } catch (err){
+    /* 中途出岔子（命令失败、被系统打断）：把画布和围边还原，
+       别把界面留在"钉住一半"的状态里。 */
+    logBoot('imm: failed ' + ((err && err.message) || err));
+    unpinStage(document.querySelector('.stage'));
+    backdropSet(0);
   } finally {
     immersiveBusy = false;
-    // 兜底：中途出任何岔子，别把背景留在压暗状态
+    // 兜底：别把背景留在深色围边状态
     const el = $('bgDim');
     if (el && el.style.opacity && el.style.opacity !== '0') el.style.opacity = '0';
   }
