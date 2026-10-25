@@ -43,12 +43,6 @@ setTimeout(function(){
   </div>
 </div>
 
-<!-- 沉浸切换时画布之外那一圈用深色兜住（不是暗场幕）。
-     结构是「窗口先一帧跳全屏 → 画布再从原尺寸长满」，所以画布长满之前边上
-     一定会露出一圈；以前露的是红底，跟黑胶的深色对比太强，看着就是
-     "红底先铺满、内容后到"。详见 chrome.css 的 #bgDim 与 main.js 的 enterImmersive。 -->
-<div id="bgDim" aria-hidden="true"></div>
-
 <div class="stage">
 
   <!-- ================= 左：黑胶唱机 ================= -->

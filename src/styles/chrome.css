@@ -130,9 +130,16 @@ body.immersive.is-desktop{--safe-t:14px}
 
 .controls{transition:opacity .45s var(--ease), transform .45s var(--ease)}
 body.ctrl-hidden .controls{opacity:0;transform:translateY(14px);pointer-events:none}
+/* 控件藏起来的时候光标一起藏 —— 视频播放器的标准做法（mpv 的 --cursor-autohide、
+   VLC 的自动隐藏光标都是这个行为）。全屏里那只箭头戳在画面中间最破坏沉浸感。
+   一有鼠标动作 showCtrlBar 就摘掉 ctrl-hidden，光标和控件同时回来。
+   需要 `*` 兜底：按钮、唱片（cursor:grab）各自设了 cursor，光靠继承盖不住。 */
+body.immersive.ctrl-hidden,
+body.immersive.ctrl-hidden *{cursor:none}
 /* 沉浸：把面板底部的留白收掉，歌词区（flex:1）顺势长到控件底下。
-   控件本身一直是绝对定位浮着的，位置不动，所以整个过程只有歌词区在长，
-   配上 .panel 的 padding-bottom 过渡就是一段连续的动画，而不是硬跳。 */
+   控件本身一直是绝对定位浮着的，位置不动，所以只有歌词区在长。
+   这里没有过渡 —— 它和窗口切全屏发生在同一帧，本来就看不出"跳"；
+   单独给它加过渡反而会在窗口变化时被 WebView2 丢掉，留个半截状态。 */
 body.immersive .panel{padding-bottom:0}
 /* 以前这里压了一块同色渐变当蒙版，问题是底色是径向渐变，写死的暗红
    在右下角比周围更亮，就成了一块突兀的矩形。改成不放底色：
@@ -154,20 +161,7 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
 
-/* ---- 沉浸切换的"深色围边" ----
-   这一层不是暗场幕，是**围边**：它只负责盖住"画布之外那一圈"。
-   切换的结构是「窗口先一帧跳到全屏 → 画布再从原尺寸长满全屏」，所以在画布
-   长满之前，屏幕边上一定会露出一圈东西。以前那一圈是 body 的红底，红底和
-   黑胶的深色对比太强，看着就是"红底先铺满、内容后到"，很割裂。
-   现在这一圈是深色，而且和黑胶同一个色系，于是整个过渡读起来是
-   "应用接管了屏幕 → 播放器从中间展开"。
-
-   它只在窗口**不变化**的时刻开/关（跳全屏前一刻开、画布铺满后一刻关），
-   所以不会被 resize 打断 —— 之前那版暗场幕就是死在"过渡跨过了 resize"上。 */
-#bgDim{
-  position:fixed;top:0;right:0;bottom:0;left:0;
-  z-index:0;
-  pointer-events:none;
-  opacity:0;
-  background:radial-gradient(120% 100% at 50% 45%, #1c0509 0%, #0d0306 55%, #060103 100%);
-}
+/* 沉浸切换不留过渡层：切换是"窗口一帧跳全屏"，画布本身就是 fixed + inset:0，
+   会跟着窗口一帧铺满，不需要任何遮罩去盖住中间态（详见 main.js 的 setImmersive）。
+   窗口 backgroundColor 已经改成 #0d0306，万一 WebView2 的表面比窗口慢一帧，
+   露出来的也是深色，读起来就是播放器的黑边。 */

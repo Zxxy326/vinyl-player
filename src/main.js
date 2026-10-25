@@ -837,269 +837,64 @@ function showCtrlBar(){
 }
 
 /* 沉浸切换
-   =========
-   这里踩过三个坑，结论写在最前面：
-     ① Windows 的窗口尺寸只有终态 —— setFullscreen / setSize 都是"一帧换掉"；
-     ② WebView2 在窗口尺寸变化的那些帧里要重建渲染表面，正在跑的 CSS 过渡会被
-        直接丢弃（CDP 里 opacity 0→1 跑得好好的，真机录屏逐帧看一帧都没有）；
-     ③ 重排也晚一两帧，于是窗口先变大、内容后长满，中间那半秒画面是空的。
-   只要"过渡"和"resize"在时间上重叠，①②③ 就会同时发作 —— 这就是前几版
-   怎么调都生硬的根本原因，不是参数问题。
+   ========
+   **这一版没有过渡，一条都没有。** 前后试过五版自造过渡（暗场幕、钉住画布再放大、
+   逐帧推窗口、窗口先跳再长画布、两条计时器同步），全都比不做更难看。原因不在实现，
+   在**对象**：
 
-   所以这一版把两件事**在时间上彻底拆开**：
-     ① 先把画布钉成当前尺寸居中，围边压成深色 —— 这一帧画面完全没变；
-     ② 窗口一帧跳到全屏。此刻屏幕上是"原尺寸的播放器 + 深色围边"，
-        读起来是"应用接管了屏幕"，而不是"窗口突然变大"；
-     ③ 窗口从此不再变化，纯在页面里把画布从原尺寸长到全屏，唱片同步插值。
-   ③ 期间一次 resize 都没有，CSS 过渡不会被丢弃，也没有重排要追 ——
-   顺滑是这个结构本身保证的，不靠调参。 */
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-/* 双 rAF = 等这一帧真的画出来再往下走 */
-const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (_) { return false; } };
-/* 画布尺寸、唱片直径、围边统一用这一条曲线，才是"一起展开"而不是各走各的。
-   这条曲线的 JS 版本在下面 bezier() 里，两边必须是同一组控制点。 */
-const IMM_EASE = 'cubic-bezier(.22,.61,.36,1)';
-const IMM_PTS = [0.22, 0.61, 0.36, 1];
+     .stage 是 position:fixed + inset:0，它**任何时候都铺满视口**；
+     --disc 也是从 vh/vw 算出来的（见 app.css 的断点）。
 
-function readDisc(){
-  const p = document.querySelector('.platter');
-  return p ? p.getBoundingClientRect().width : 0;
-}
+   也就是说页面里根本不存在一个"从 A 尺寸长到 B 尺寸"的东西 —— 窗口一变，
+   布局、唱片、字号在同一帧就跟上了。我们一直在给一个**本来就没有过渡的对象**
+   硬造过渡，怎么调都别扭。
 
-/* 桌面端 --disc 只有两档系数（见 app.css）：
-   1001–1240 宽用 70vh/38vw，其余用 74vh/41vw。
-   过渡期间画布尺寸和视口脱钩了（视口已经是全屏的），所以终点直径要自己算。
-   **改了 CSS 断点记得同步这里。** */
-function discFor(w, h){
-  const narrow = w >= 1001 && w <= 1240;
-  const kh = narrow ? 70 : 74, kw = narrow ? 38 : 41;
-  return Math.min(kh * h / 100, kw * w / 100);
-}
+   视频播放器怎么做的（mpv / VLC / PotPlayer / MPC-HC，以及浏览器原生全屏）：
+   一个 SetWindowLongPtr(GWL_STYLE, WS_POPUP) + SetWindowPos 把窗口**一帧**切到
+   全屏，画面内容立即按新尺寸重排，窗口和内容都不做动画。它们唯一的动画是
+   "控件淡出" —— 也就是 .titlebar 和 body.ctrl-hidden 那两条 opacity 过渡。
 
-/* 同一条贝塞尔曲线的 JS 版本（IMM_EASE = cubic-bezier(.22,.61,.36,1)）。
-   为什么要自己算：画布尺寸和唱片直径必须用**同一个 p**，否则两者会各走各的。
-   上一版让 CSS 过渡推尺寸、JS 每帧 getBoundingClientRect() 去量进度，
-   量一次就是一次强制同步重排 —— 和过渡自身的重排叠在同一帧里，
-   实测把这段过渡的帧数直接砍到 13 帧/560ms（约 20fps），看着就是台阶。
-   现在两边都由 JS 逐帧写，一帧只重排一次，且严格同步。 */
-function bezier(x1, y1, x2, y2){
-  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
-  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
-  const fx = (t) => ((ax * t + bx) * t + cx) * t;
-  const fy = (t) => ((ay * t + by) * t + cy) * t;
-  const dx = (t) => (3 * ax * t + 2 * bx) * t + cx;
-  return (x) => {
-    if (x <= 0) return 0;
-    if (x >= 1) return 1;
-    let t = x;
-    for (let i = 0; i < 6; i++){
-      const e = fx(t) - x;
-      if (Math.abs(e) < 1e-4) return fy(t);
-      const d = dx(t);
-      if (Math.abs(d) < 1e-6) break;
-      t -= e / d;
+   所以照着做：切 class + 调一次 set_fullscreen，两件事在同一个同步任务里做完，
+   浏览器只绘制一次，没有中间帧可看。生硬感随之消失 —— 因为"生硬"本来就是
+   "看见了过渡"的副产品，没有过渡就没有这个评价。 */
+function setImmersive(on){
+  if (on === immersive) return;
+  immersive = on;
+  const b = $('immersiveBtn');
+  if (b) b.setAttribute('aria-pressed', String(on));
+
+  /* 顺序：先切 class，再动窗口。
+     先切 class 让版式（标题栏让位、顶部安全区从 36px 收到 14px）在窗口变大之前
+     就位，窗口撑开那一帧布局已经是终态，一次重排到位；反过来会先按旧版式铺满、
+     再跳一下，就是二段感。
+     两个调用之间不 await —— 同一个任务里浏览器不会插一帧进来。 */
+  document.body.classList.toggle('immersive', on);
+
+  if (IS_DESKTOP && TAURI_WIN){
+    invoke('set_fullscreen', { on }).catch((e) => logBoot('imm: ' + e));
+  } else if (IS_ANDROID && HAS_ANDROID){
+    try { acall('hideStatusBar', { on: on ? true : !!S.hideBar }); } catch (_) {}
+  } else if (on){
+    if (document.documentElement.requestFullscreen){
+      document.documentElement.requestFullscreen().catch(() => {});
     }
-    let lo = 0, hi = 1;
-    t = x;
-    for (let i = 0; i < 20; i++){
-      const e = fx(t);
-      if (Math.abs(e - x) < 1e-4) break;
-      if (e < x) lo = t; else hi = t;
-      t = (lo + hi) / 2;
-    }
-    return fy(t);
-  };
-}
-const IMM_BEZ = bezier(...IMM_PTS);
-
-/* 把画布从 from 长到 to，唱片直径同步从 d0 插到 d1。
-   --disc 只被 .platter 消费，所以钉在 .platter 上而不是 .deck 上：
-   挂在 .deck 会让整个 deck 子树每帧重算样式，实测帧数明显更低。 */
-async function growStage(st, from, to, d0, d1, dur){
-  const pl = document.querySelector('.platter');
-  if (!st) return;
-  const set = (p) => {
-    st.style.width = (from.w + (to.w - from.w) * p) + 'px';
-    st.style.height = (from.h + (to.h - from.h) * p) + 'px';
-    if (pl) pl.style.setProperty('--disc', (d0 + (d1 - d0) * p) + 'px');
-  };
-  if (!dur){ set(1); return; }
-  set(0);
-  const t0 = performance.now();
-  await new Promise((res) => {
-    const step = () => {
-      const t = Math.min(1, (performance.now() - t0) / dur);
-      set(IMM_BEZ(t));
-      if (t < 1) requestAnimationFrame(step); else res();
-    };
-    requestAnimationFrame(step);
-  });
-}
-
-let __immFrames = 0, __immT0 = 0;   // 诊断：过渡实际出了多少帧
-let immersiveBusy = false;
-let stagePrev = null;   // 进沉浸前的视口尺寸，退出时缩回去
-
-/* 把 .stage 钉成指定 px 尺寸并居中。
-   必须用 px：过渡期间视口已经是全屏的，vh/vw 给的是全屏尺寸，钉不住。 */
-function pinStage(w, h, disc){
-  const st = document.querySelector('.stage');
-  if (!st) return null;
-  const pl = document.querySelector('.platter');
-  st.style.transition = 'none';
-  st.style.position = 'fixed';
-  st.style.left = '50%'; st.style.top = '50%';
-  st.style.right = 'auto'; st.style.bottom = 'auto';
-  st.style.width = w + 'px'; st.style.height = h + 'px';
-  st.style.transform = 'translate(-50%,-50%)';
-  if (pl && disc > 0) pl.style.setProperty('--disc', disc + 'px');
-  void st.offsetWidth;
-  return st;
-}
-
-function unpinStage(st){
-  if (!st) return;
-  const pl = document.querySelector('.platter');
-  st.style.transition = '';
-  st.style.position = '';
-  st.style.left = ''; st.style.top = '';
-  st.style.right = ''; st.style.bottom = '';
-  st.style.width = ''; st.style.height = '';
-  st.style.transform = '';
-  if (pl) pl.style.removeProperty('--disc');
-}
-
-/* 深色围边：画布之外那一圈。它只在"画布还没铺满"的时候露出来，
-   所以只要它是深色，就不会出现"红底先铺满"的割裂感。
-   这一层只动 opacity，而且只在窗口**不变化**的时候开关，所以不会被 resize 打断。 */
-function backdropSet(v){
-  const el = $('bgDim');
-  if (!el) return null;
-  el.style.transition = 'none';
-  el.style.opacity = String(v);
-  void el.offsetWidth;
-  return el;
-}
-
-/* 跳全屏之后 WebView2 不一定在同一帧就把 innerWidth 更新掉，等它一下 */
-async function viewportChanged(w0, h0){
-  for (let i = 0; i < 20; i++){
-    await new Promise((r) => requestAnimationFrame(r));
-    if (innerWidth !== w0 || innerHeight !== h0){ await frame(); return; }
+  } else if (document.fullscreenElement && document.exitFullscreen){
+    document.exitFullscreen().catch(() => {});
   }
-}
 
-async function enterImmersive(dur){
-  stagePrev = { w: innerWidth, h: innerHeight };
-  const disc0 = readDisc();
-  const st = pinStage(stagePrev.w, stagePrev.h, disc0);
-  backdropSet(1);          // 画布此刻还铺满整个窗口，这一下完全看不见
-  await frame();           // 让"钉住"这一帧先上屏，再去跳窗口
-
-  const w0 = innerWidth, h0 = innerHeight;
-  await invoke('set_fullscreen', { on: true }).catch(() => {});
-  await viewportChanged(w0, h0);
-  /* 再多等两帧：全屏有时分两趟把窗口撑开，第二趟如果落在过渡开始之后，
-     过渡会被那次 resize 打断。40ms 看不出来，但能挡掉这一趟。 */
-  await wait(40);
-
-  const tw = innerWidth, th = innerHeight;
-  const disc1 = discFor(tw, th);
-  /* 标题栏淡出、安全区让位。放在跳全屏之后：这点位移和"接管屏幕"同一帧，
-     看不出来；放在之前反而会在窗口还没变大时先跳一下。 */
-  document.body.classList.add('immersive');
-  void st && st.offsetWidth;
-
-  /* 数一下这段过渡实际画了多少帧。这个数直接决定观感：
-     帧数太少再好的缓动也是台阶，写进日志方便以后排查。 */
-  __immFrames = 0; __immT0 = performance.now();
-  (function tick(){ __immFrames++; if (performance.now() - __immT0 < dur + 80) requestAnimationFrame(tick); })();
-
-  await Promise.all([
-    growStage(st, { w: stagePrev.w, h: stagePrev.h }, { w: tw, h: th }, disc0, disc1, dur)
-  ]);
-  unpinStage(st);
-  backdropSet(0);          // 画布已经铺满，这一下也看不见
-  logBoot('imm: enter ' + __immFrames + 'f/' + Math.round(performance.now() - __immT0) + 'ms');
-}
-
-async function exitImmersive(dur){
-  const back = stagePrev || { w: innerWidth, h: innerHeight };
-  const fw = innerWidth;
-  const disc0 = readDisc();
-  const disc1 = discFor(back.w, back.h);
-  const st = pinStage(innerWidth, innerHeight, disc0);   // 钉成当前全屏尺寸，画面不变
-  backdropSet(1);                                        // 围边深色，此刻还看不见
-  await frame();
-
-  await growStage(st, { w: fw, h: innerHeight }, { w: back.w, h: back.h }, disc0, disc1, dur);
-
-  const w0 = innerWidth, h0 = innerHeight;
-  await invoke('set_fullscreen', { on: false }).catch(() => {});
-  await viewportChanged(w0, h0);
-
-  document.body.classList.remove('immersive');   // 标题栏在正常窗口尺寸下才淡回来
-  unpinStage(st);
-  backdropSet(0);
-  stagePrev = null;
-}
-
-async function setImmersive(on){
-  // 过渡期间忽略重复触发，否则快速连点会把两次窗口切换叠在一起
-  if (on === immersive || immersiveBusy) return;
-  immersiveBusy = true;
-  const soft = IS_DESKTOP && TAURI_WIN;   // 只有要换原生窗口的这一端才需要这套
-  const dur = reduceMotion() ? 0 : 560;
-  try {
-    immersive = on;
-    const b = $('immersiveBtn');
-    if (b) b.setAttribute('aria-pressed', String(on));
-
-    if (on){
-      if (soft){
-        await enterImmersive(dur);
-      } else {
-        document.body.classList.toggle('immersive', true);
-        if (IS_ANDROID && HAS_ANDROID){
-          try { acall('hideStatusBar', { on: true }); } catch (_) {}
-        } else if (document.documentElement.requestFullscreen){
-          try { await document.documentElement.requestFullscreen(); } catch (_) {}
-        }
-      }
-      await keepAwake(true);
-      showCtrlBar();
-      // 手机上没有键盘，别提示快捷键
-      toast(IS_ANDROID || matchMedia('(hover:none)').matches
-        ? '沉浸播放 · 再点一次退出'
-        : '沉浸播放 · 按 F 或 Esc 退出');
-    } else {
-      if (soft){
-        await exitImmersive(dur);
-      } else {
-        if (IS_ANDROID && HAS_ANDROID){
-          try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
-        } else if (document.fullscreenElement && document.exitFullscreen){
-          try { await document.exitFullscreen(); } catch (_) {}
-        }
-      }
-      document.body.classList.toggle('immersive', false);
-      await keepAwake(false);
-      clearTimeout(ctrlTimer);
-      document.body.classList.remove('ctrl-hidden');
-    }
-  } catch (err){
-    /* 中途出岔子（命令失败、被系统打断）：把画布和围边还原，
-       别把界面留在"钉住一半"的状态里。 */
-    logBoot('imm: failed ' + ((err && err.message) || err));
-    unpinStage(document.querySelector('.stage'));
-    backdropSet(0);
-  } finally {
-    immersiveBusy = false;
-    // 兜底：别把背景留在深色围边状态
-    const el = $('bgDim');
-    if (el && el.style.opacity && el.style.opacity !== '0') el.style.opacity = '0';
+  if (on){
+    keepAwake(true);
+    showCtrlBar();
+    // 手机上没有键盘，别提示快捷键
+    toast(IS_ANDROID || matchMedia('(hover:none)').matches
+      ? '沉浸播放 · 再点一次退出'
+      : '沉浸播放 · 按 F 或 Esc 退出');
+  } else {
+    keepAwake(false);
+    clearTimeout(ctrlTimer);
+    document.body.classList.remove('ctrl-hidden');
   }
+  logBoot('imm: ' + (on ? 'enter' : 'leave'));
 }
 
 if ($('immersiveBtn')) $('immersiveBtn').addEventListener('click', () => setImmersive(!immersive));

@@ -24,7 +24,7 @@
         "theme": "Dark",
         "visible": false,
         "decorations": false,
-        "backgroundColor": "#0d0306",
+        "backgroundColor": "#28070b",
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-sandbox"
       }
     ],
