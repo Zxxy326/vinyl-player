@@ -32,6 +32,11 @@ jobs:
           java-version: "17"
 
       - uses: android-actions/setup-android@v3
+        with:
+          # 默认包列表里带 legacy 的 `tools`，Google 的仓库时不时找不到它，
+          # 整个 job 会在 setup 阶段失败（2026-11-02 v2.0.0 首发就挂在这）。
+          # 只装这个项目真正要的：platform-tools + SDK 35 + build-tools 35。
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       - name: Build frontend into app assets
         run: node scripts/build-web.mjs
