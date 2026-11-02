@@ -17,10 +17,15 @@ export const S = {
   folder: '',         // 桌面端上次的目录
   keepOn: false,      // 安卓：保持屏幕常亮
   hideBar: false,     // 安卓：隐藏顶部状态栏
+  immMotion: true,    // 沉浸切换：唱片 FLIP 放大（设置里可关）
+  bg: 'crimson',      // 背景色板：crimson|amber|pine|indigo|violet|charcoal|custom
+  bgHue: 355,         // 自定义背景的色相（0-360，仅 bg==='custom' 时生效）
   closeAction: 'ask'  // 桌面：关窗口时 'ask' | 'quit' | 'tray'
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, closeAction: 'ask' };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, immMotion: true, bg: 'crimson', bgHue: 355, closeAction: 'ask' };
+
+const BG_IDS = ['crimson', 'amber', 'pine', 'indigo', 'violet', 'charcoal'];
 
 export function loadPrefs(){
   try {
@@ -34,6 +39,12 @@ export function loadPrefs(){
   S.folder = prefs.folder || '';
   S.keepOn = !!prefs.keepOn;
   S.hideBar = !!prefs.hideBar;
+  // 没存过时默认开：这是沉浸切换的默认观感，存过 false 才关
+  S.immMotion = prefs.immMotion !== false;
+  // 背景：认预设 id，认不出来就回绯红；自定义色相夹到 0-360
+  S.bg = prefs.bg === 'custom' || BG_IDS.indexOf(prefs.bg) >= 0 ? prefs.bg : 'crimson';
+  S.bgHue = typeof prefs.bgHue === 'number' && isFinite(prefs.bgHue)
+    ? ((Math.round(prefs.bgHue) % 360) + 360) % 360 : 355;
   S.closeAction = (prefs.closeAction === 'quit' || prefs.closeAction === 'tray') ? prefs.closeAction : 'ask';
   return prefs;
 }
@@ -46,6 +57,9 @@ export function savePrefs(){
   prefs.folder = S.folder;
   prefs.keepOn = !!S.keepOn;
   prefs.hideBar = !!S.hideBar;
+  prefs.immMotion = S.immMotion !== false;
+  prefs.bg = S.bg === 'custom' || BG_IDS.indexOf(S.bg) >= 0 ? S.bg : 'crimson';
+  prefs.bgHue = Math.round(S.bgHue || 0) % 360;
   prefs.closeAction = S.closeAction;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }

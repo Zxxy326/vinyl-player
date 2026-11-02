@@ -5,6 +5,7 @@
 一个横屏音乐播放界面：左侧旋转黑胶 + 唱臂，右侧歌词。按住唱片可以直接搓碟，松手有惯性；歌词与实时频谱两种视图一键切换。
 
 **在线试听 → https://zxxy326.github.io/vinyl-player/**
+**下载 Windows / Android 版 → https://github.com/Zxxy326/vinyl-player/releases**
 
 ![歌词视图](docs/lyrics.jpg)
 
@@ -13,6 +14,7 @@
 - **可转的黑胶**：播放时匀速旋转，暂停即停；暂停时唱臂抬起，播放时 1.5s 缓动落针
 - **拖拽搓碟**：按住唱片拖动，唱片跟手转、音轨跟着刮、松手带惯性；几乎没动则视为点击播放/暂停
 - **双视图**：歌词 ⇄ 实时频谱，机身右下角左侧那颗旋钮切换；有歌词默认歌词，没歌词自动显示频谱
+- **可换的背景色板**：6 套同风格的绒布光预设（绯红 / 琥珀 / 松绿 / 藏蓝 / 紫罗兰 / 石墨）+ 自定义色相条；背景、暗部、启动幕和唱片中心标一起换，选择存在本机
 - **真频谱**：Web Audio `AnalyserNode` + 56 根对数分频柱，不是假动画
 - **曲库抽屉**：歌曲 / 专辑 / 艺术家 / 歌单 / 设置五个页签；专辑与艺术家按曲目聚合，歌单支持新建、加入、从歌单直接播放
 - **音质分级**：按采样率、位深、码率自动标 SQ（无损）/ HQ / Hi-Res / 其他徽标
@@ -37,8 +39,8 @@
 | 形态 | 怎么用 | 曲库 |
 | --- | --- | --- |
 | **网页单文件** | 双击 `index.html`，或 `python -m http.server 8000` | 拖入文件夹（`webkitdirectory`） |
-| **Windows 桌面版** | 下载 `vinyl-player.exe` 直接双击（免安装），或装 `Vinyl Player_*_x64-setup.exe` | 原生扫描目录，读 ID3/FLAC/Vorbis 标签与内嵌封面、内嵌歌词 |
-| **Android** | 下载 `vinyl-player-*.apk` 安装（Android 7.0+） | 系统媒体库（MediaStore）自动扫描，无需选目录 |
+| **Windows 桌面版** | 到 [Releases](https://github.com/Zxxy326/vinyl-player/releases) 下载 `vinyl-player.exe` 直接双击（免安装），或装 `Vinyl Player_*_x64-setup.exe` | 原生扫描目录，读 ID3/FLAC/Vorbis 标签与内嵌封面、内嵌歌词 |
+| **Android** | 到 [Releases](https://github.com/Zxxy326/vinyl-player/releases) 下载 `vinyl-player-*.apk` 安装（Android 7.0+） | 系统媒体库（MediaStore）自动扫描，无需选目录 |
 
 桌面版是**绿色单文件**，不写注册表、不装运行库（Win10/11 自带 WebView2）。NSIS 安装包由 CI 在 GitHub Actions 上额外产出，本地打包见下方「从源码构建」。
 
@@ -96,9 +98,9 @@ npm run android:build  # 出 APK（需 JDK 17 + Android SDK 35）
 ## 项目结构
 
 ```
-src/                       # 源码（16 个 ES 模块 + 4 个样式表）
+src/                       # 源码（16 个 ES 模块 + 6 个样式表）
   index.html               # 模板，含 /*__STYLES__*/ 与 /*__SCRIPT__*/ 占位
-  styles/                  # base / deck / panel / app
+  styles/                  # base / deck / panel / app / chrome / boot
   core/                    # 工具、状态与持久化、平台桥、平台能力
   audio/                   # 后端抽象 + WebAudio + Media3 两套实现
   lyrics/lrc.js            # LRC 解析（offset、一行多时间戳、[mm:ss:xx]）

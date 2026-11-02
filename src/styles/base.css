@@ -15,6 +15,28 @@
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
+  /* ---- 背景色板 ----
+     背景始终是同一块"绒布上的径向光"：左上打光、向右下压暗。换色只换色相，
+     五档的明度阶梯不变，所以换到任何颜色都还是同一种风格。
+     预设见文件末尾的 .pal-*；用户在设置里拖色相条时由脚本写 inline 变量。
+     --bg-h 同时给暗部（抽屉 / 弹窗 / 投影）取色，保证面板跟着背景走。 */
+  --bg-h:355;
+  --bg-1:#b8414a;--bg-2:#a02b33;--bg-3:#8b1e26;--bg-4:#6d141c;--bg-5:#4e0e15;
+}
+/* 由 --bg-h 派生的暗部色：必须声明在 body 上 —— 自定义色相是写在 body 的
+   inline 变量里的，让它在 body 这一层再解析一次，换色时面板才会跟着变 */
+body{
+  --vig:hsl(var(--bg-h) 76% 6% / .55);
+  --sheet-a:hsl(var(--bg-h) 56% 9.5% / .985);
+  --sheet-b:hsl(var(--bg-h) 60% 5.9% / .985);
+  --card-a:hsl(var(--bg-h) 53% 11.8% / .99);
+  --card-b:hsl(var(--bg-h) 55% 7% / .99);
+  --scrim:hsl(var(--bg-h) 60% 4.7% / .55);
+  --modal-scrim:hsl(var(--bg-h) 60% 2.4% / .62);
+  --toast-bg:hsl(var(--bg-h) 60% 4.3% / .92);
+  /* 唱片中心的红标也跟着色板走：明度固定，只换色相；
+     各色系对饱和度的耐受不一样（绿/蓝同样饱和度下更刺眼），由 .pal-* 微调 */
+  --label-sat:70%;
 }
 html,body{height:100%}
 body{
@@ -22,7 +44,7 @@ body{
   color:var(--cream);
   overflow:hidden;
   background:
-    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+    radial-gradient(120% 90% at 18% 6%, var(--bg-1) 0%, var(--bg-2) 26%, var(--bg-3) 48%, var(--bg-4) 74%, var(--bg-5) 100%);
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
 }
@@ -35,7 +57,7 @@ body::before{
 }
 body::after{
   content:"";position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:3;
-  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, rgba(30,4,8,.55) 100%);
+  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, var(--vig) 100%);
 }
 
 .stage{
@@ -63,3 +85,14 @@ body::after{
 /* 低性能档：关噪点、去高光、压低 DPR 由 JS 处理 */
 body.perf-low::before{display:none}
 body.perf-low .gloss{display:none}
+
+/* ============ 背景预设 ============
+   同一块绒布光，只换色相。五档的明度/饱和度按各自色系微调过（绿、蓝在
+   相同 HSL 下看着比红更亮，所以压了一点饱和度），但阶梯顺序完全一致。
+   这些类同时给设置里的色卡预览用：色卡自己带 .pal-*，背景才算得对。 */
+.pal-crimson{--bg-h:355;--bg-1:#b8414a;--bg-2:#a02b33;--bg-3:#8b1e26;--bg-4:#6d141c;--bg-5:#4e0e15;--label-sat:75%}
+.pal-amber  {--bg-h:26; --bg-1:#b37342;--bg-2:#9b5c2c;--bg-3:#844b1f;--bg-4:#663814;--bg-5:#49270e;--label-sat:74%}
+.pal-pine   {--bg-h:152;--bg-1:#4ba078;--bg-2:#338a61;--bg-3:#25744f;--bg-4:#1a5b3d;--bg-5:#11402a;--label-sat:58%}
+.pal-indigo {--bg-h:222;--bg-1:#4363ad;--bg-2:#2d4c95;--bg-3:#203c7e;--bg-4:#152b61;--bg-5:#0e1e44;--label-sat:62%}
+.pal-violet {--bg-h:288;--bg-1:#9646aa;--bg-2:#7f2f93;--bg-3:#6b217d;--bg-4:#50165f;--bg-5:#380f43;--label-sat:56%}
+.pal-charcoal{--bg-h:214;--bg-1:#686f78;--bg-2:#545b63;--bg-3:#434951;--bg-4:#32373e;--bg-5:#22262a;--label-sat:12%}

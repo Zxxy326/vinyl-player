@@ -11,8 +11,8 @@
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:300;
   display:grid;place-items:center;
   background:
-    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
-  box-shadow:inset 0 0 220px rgba(26,3,7,.55);
+    radial-gradient(120% 90% at 18% 6%, var(--bg-1) 0%, var(--bg-2) 26%, var(--bg-3) 48%, var(--bg-4) 74%, var(--bg-5) 100%);
+  box-shadow:inset 0 0 220px var(--vig);
   opacity:1;visibility:visible;
   transition:opacity .85s var(--ease), visibility 0s linear .85s;
   -webkit-user-select:none;user-select:none;
@@ -52,9 +52,13 @@ body.boot-done .veil{opacity:0;visibility:hidden}
   background:linear-gradient(90deg,transparent,rgba(246,234,217,.42),transparent);
 }
 
-/* ---- 界面缓进 ---- */
-.deck,.panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
-.panel{transition-delay:.09s}
+/* ---- 界面缓进 ----
+   这两条过渡只服务于"启动幕化开"这一下，所以必须挂在 body.boot-reveal 上。
+   以前是裸的 .deck,.panel：boot.css 在打包顺序里排最后，等于给 .panel 永久
+   挂了一个 1.15s 的 transform/opacity 过渡，盖掉了 panel.css 自己的定义
+   （也让沉浸切换时那块留白"看起来有过渡"）。揭幕动画放完就把类摘掉。 */
+body.boot-reveal .deck,body.boot-reveal .panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
+body.boot-reveal .panel{transition-delay:.09s}
 body.booting .deck{opacity:0;transform:translateY(16px) scale(.992)}
 body.booting .panel{opacity:0;transform:translateY(12px)}
 /* 标题栏跟着幕一起出现（它本来就压在幕底下，不用单独做过渡） */
@@ -64,5 +68,5 @@ body.booting .stage{pointer-events:none}
 @media (prefers-reduced-motion:reduce){
   .veil-disc{animation:none}
   .veil-in{animation-duration:.01s}
-  .deck,.panel,.veil{transition-duration:.01s}
+  body.boot-reveal .deck,body.boot-reveal .panel,.veil{transition-duration:.01s}
 }

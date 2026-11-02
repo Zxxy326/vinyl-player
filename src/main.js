@@ -74,7 +74,15 @@ const library = new Library({
     onAddToPlaylist: (trackId) => doAddToPlaylist(trackId),
     onPlaylistAction: (act, id) => doPlaylistAction(act, id),
     onRemoveFromPlaylist: (id, trackId) => doRemoveFromPlaylist(id, trackId),
-    onSetting: (key) => doSetting(key)
+    onSetting: (key) => doSetting(key),
+    /* 只在色相条松手时进来（拖动过程只更新设置页里的小色点），
+       所以这里可以放心地整页换色 + 立即落盘 */
+    onBgHue: (v) => {
+      S.bg = 'custom';
+      S.bgHue = v;
+      applyBg();
+      savePrefs();
+    }
   }
 });
 
@@ -111,7 +119,10 @@ function renderLib(extra){
     view: S.view,
     volume: S.volume,
     keepOn: S.keepOn,
-    hideBar: S.hideBar
+    hideBar: S.hideBar,
+    immMotion: S.immMotion,
+    bg: S.bg,
+    bgHue: currentBgHue()
   }, extra || {});
   library.render(S.tracks, S.index, S.playing, opts);
 }
@@ -603,12 +614,35 @@ function applyScreenPrefs(){
   try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
 }
 
+/* ================= 背景色板 =================
+   预设色卡是纯 CSS（.pal-*），真正把类/自定义色相写上去的是 index.html 里
+   那段引导脚本（它必须在首帧之前跑，否则启动幕会先闪一下默认红色）。
+   这里只是转调；入口保留一份兜底，免得脚本被裁掉时整页没背景。 */
+const BG_HUE = { crimson: 355, amber: 26, pine: 152, indigo: 222, violet: 288, charcoal: 214 };
+const BG_NAME = { crimson: '绯红', amber: '琥珀', pine: '松绿', indigo: '藏蓝', violet: '紫罗兰', charcoal: '石墨' };
+
+function currentBgHue(){
+  return S.bg === 'custom' ? S.bgHue : (BG_HUE[S.bg] != null ? BG_HUE[S.bg] : 355);
+}
+
+function applyBg(){
+  if (typeof window.__vpBgApply === 'function'){
+    window.__vpBgApply(S.bg, S.bgHue);
+    return;
+  }
+  document.body.className = document.body.className
+    .replace(/\bpal-[a-z]+\b/g, '').trim() + ' pal-' + (BG_HUE[S.bg] != null ? S.bg : 'crimson');
+}
+
 /* 设置页自己缓存了一份状态，改完要同步过去再重绘，否则界面还显示旧值 */
 function refreshSettings(){
   library.view = S.view;
   library.volume = S.volume;
   library.keepOn = S.keepOn;
   library.hideBar = S.hideBar;
+  library.immMotion = S.immMotion;
+  library.bg = S.bg;
+  library.bgHue = currentBgHue();
   library.closeAction = S.closeAction;
   library.renderSettings();
 }
@@ -637,6 +671,17 @@ function doSetting(key){
     applyScreenPrefs();
     refreshSettings();
     toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
+  } else if (key === 'imm-motion'){
+    S.immMotion = !S.immMotion;
+    savePrefs();
+    refreshSettings();
+    toast(S.immMotion ? '沉浸放大 · 已开启' : '沉浸放大 · 已关闭');
+  } else if (key.indexOf('bg-') === 0 && BG_NAME[key.slice(3)]){
+    S.bg = key.slice(3);
+    savePrefs();
+    applyBg();
+    refreshSettings();
+    toast('背景 · ' + BG_NAME[S.bg]);
   } else if (key === 'close-quit' || key === 'close-tray' || key === 'close-ask'){
     S.closeAction = key.slice(6);
     savePrefs();
@@ -838,71 +883,221 @@ function showCtrlBar(){
 
 /* 沉浸切换
    ========
-   **这一版没有过渡，一条都没有。** 前后试过五版自造过渡（暗场幕、钉住画布再放大、
-   逐帧推窗口、窗口先跳再长画布、两条计时器同步），全都比不做更难看。原因不在实现，
-   在**对象**：
+   窗口和内容必须在**同一帧**换完。上一版是"class 先切、invoke 后调"，注释里
+   假设"同一个任务里浏览器不会插一帧"——但 invoke 是跨 IPC 的异步调用，中间
+   必然按旧窗口尺寸先画 1~3 帧新版式，然后窗口再跳，读起来是两段。
 
-     .stage 是 position:fixed + inset:0，它**任何时候都铺满视口**；
-     --disc 也是从 vh/vw 算出来的（见 app.css 的断点）。
+   现在的顺序：
+     1. 记录旧唱片位置（FLIP 用），锁住所有会自己动的过渡（body.imm-swap）；
+     2. 先调原生全屏 / hideStatusBar，再等真实的 resize；
+     3. **在 resize 回调里**同步切 class、无过渡地重新居中歌词 —— resize 在绘制
+        之前派发，所以新版式和新尺寸一起提交，没有中间帧；窗口尺寸本来就不变时
+        最多等 4 帧后兜底执行；
+     4. 260ms 后解锁：盖住 --ctrl-h 的二次测量和 ResizeObserver 的二次居中，
+        否则歌词会在切完之后再自己滑 .62s（上一版"割裂"的主因）。
+   全屏本身仍是硬切，和 mpv / VLC 一样；不同的是切点之后没有任何东西还在动
+   （唯一在动的是可关掉的唱片放大，见 imm-motion）。 */
+/* immersive / wakeLock / ctrlTimer 在上面「沉浸播放」那一段已经声明过 */
+let swapLocked = false;
+let flipTimer = 0;
+let immSeq = 0;      // 连点两下时只让最后一次切换落地（见 setImmersive）
 
-   也就是说页面里根本不存在一个"从 A 尺寸长到 B 尺寸"的东西 —— 窗口一变，
-   布局、唱片、字号在同一帧就跟上了。我们一直在给一个**本来就没有过渡的对象**
-   硬造过渡，怎么调都别扭。
+/* 无边框窗口（Tauri 的 decorations:false）客户区和外框基本重合，
+   所以 screenX/screenY 就是客户区原点；网页版有标题栏，会有十几像素误差，
+   对一次 400ms 的放大过渡可以忽略。 */
+function viewOrigin(){
+  return {
+    x: typeof window.screenX === 'number' ? window.screenX : 0,
+    y: typeof window.screenY === 'number' ? window.screenY : 0
+  };
+}
 
-   视频播放器怎么做的（mpv / VLC / PotPlayer / MPC-HC，以及浏览器原生全屏）：
-   一个 SetWindowLongPtr(GWL_STYLE, WS_POPUP) + SetWindowPos 把窗口**一帧**切到
-   全屏，画面内容立即按新尺寸重排，窗口和内容都不做动画。它们唯一的动画是
-   "控件淡出" —— 也就是 .titlebar 和 body.ctrl-hidden 那两条 opacity 过渡。
+/* 切换那几帧：titlebar / controls / panel / lyric-track 一律不带过渡。
+   只挂一下，切换完成后由 unlockSwap 摘掉。 */
+function lockSwap(){
+  if (swapLocked) return;
+  swapLocked = true;
+  document.body.classList.add('imm-swap');
+}
+function unlockSwap(){
+  if (!swapLocked) return;
+  swapLocked = false;
+  document.body.classList.remove('imm-swap');
+}
 
-   所以照着做：切 class + 调一次 set_fullscreen，两件事在同一个同步任务里做完，
-   浏览器只绘制一次，没有中间帧可看。生硬感随之消失 —— 因为"生硬"本来就是
-   "看见了过渡"的副产品，没有过渡就没有这个评价。 */
-function setImmersive(on){
+/* 原生全屏是异步的：真来了 resize 就在**回调里立刻**换版式（resize 在绘制前派发，
+   所以新尺寸和新版式一起提交，中间不会有"大窗口 + 旧版式"的帧）；
+   窗口本来就是这个尺寸时最多等 4 帧再兜底执行。
+
+   `changed` 用来处理"resize 已经派发过"的情况：Tauri 的 invoke 要跨 IPC，
+   原生窗口可能已经变完、resize 也已经发出去，响应才回到 JS —— 这时再挂监听
+   就永远等不到它，只能白等 4 帧。视口尺寸已经不是旧值就直接换。 */
+function settleResize(apply, changed){
+  return new Promise((resolve) => {
+    let done = false;
+    const onResize = () => fin(true);
+    const fin = (fire) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('resize', onResize);
+      if (fire) apply();
+      resolve();
+    };
+    if (changed && changed()){
+      apply();
+      resolve();
+      return;
+    }
+    window.addEventListener('resize', onResize, { once: true });
+    let n = 4;
+    const tick = () => (--n <= 0 ? fin(false) : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  });
+}
+
+function clearDeckFlip(){
+  clearTimeout(flipTimer);
+  const platter = $('platter');
+  if (!platter) return;
+  platter.classList.remove('imm-flipping');
+  platter.style.transition = '';
+  platter.style.transform = '';
+}
+
+/* 唱片 FLIP：把新布局里的 .platter 反向套回旧唱片的屏幕位置，再过渡回 identity。
+   只动 transform（合成层），不碰宽高 / 边距 / padding，所以不会被窗口 resize
+   打断，也不需要逐帧推窗口。
+   动的是 .platter 而不是整块 .deck —— .deck 里还有一圈 hw 小标签和旋钮，
+   它们的字号是固定的，跟着一起缩放会在起手时"变小再长回来"；.platter 里
+   只有唱片和唱臂，整体等比，uniform scale 是精确的。 */
+function flipDeck(oldRect, oldAt){
+  const platter = $('platter');
+  if (!platter || !oldRect || !oldRect.width) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const n = platter.getBoundingClientRect();
+  if (!n.width) return;
+  const s = oldRect.width / n.width;
+  if (!(s > 0) || Math.abs(s - 1) < .02) return;   // 尺寸几乎没变（安卓只收状态栏）
+
+  clearTimeout(flipTimer);
+  const now = viewOrigin();
+  /* 旧 rect 是旧视口的坐标。屏幕上"窗口居中 → 全屏铺满"时，旧内容在屏幕上的
+     位置 = 旧视口坐标 + 旧窗口原点；再减掉新窗口原点就是新视口里的起点。 */
+  const ocx = oldRect.left + oldRect.width / 2 + oldAt.x - now.x;
+  const ocy = oldRect.top + oldRect.height / 2 + oldAt.y - now.y;
+  const ncx = n.left + n.width / 2;
+  const ncy = n.top + n.height / 2;
+
+  platter.classList.add('imm-flipping');
+  platter.style.transition = 'none';
+  /* 圆盘默认以自身中心为原点：先按中心缩到旧尺寸，再平移到旧圆心，
+     正好是第一帧的旧画面；过渡回 identity 就是"长到全屏"。 */
+  platter.style.transform =
+    'translate(' + (ocx - ncx) + 'px,' + (ocy - ncy) + 'px) scale(' + s + ')';
+  void platter.offsetWidth;                         // 起点先落定，别和终点合成一次
+  requestAnimationFrame(() => {
+    platter.style.transition = 'transform .42s cubic-bezier(.22,.72,.2,1)';
+    platter.style.transform = 'none';
+  });
+  flipTimer = setTimeout(clearDeckFlip, 520);
+}
+
+async function setImmersive(on){
   if (on === immersive) return;
   immersive = on;
+  /* 连点两下（比如进入后立刻退出）时，两次切换的 invoke 会并排跑；
+     只有最后发出的那次允许改版式，前一次回来时直接作废。 */
+  const seq = ++immSeq;
   const b = $('immersiveBtn');
   if (b) b.setAttribute('aria-pressed', String(on));
 
-  /* 顺序：先切 class，再动窗口。
-     先切 class 让版式（标题栏让位、顶部安全区从 36px 收到 14px）在窗口变大之前
-     就位，窗口撑开那一帧布局已经是终态，一次重排到位；反过来会先按旧版式铺满、
-     再跳一下，就是二段感。
-     两个调用之间不 await —— 同一个任务里浏览器不会插一帧进来。 */
-  document.body.classList.toggle('immersive', on);
+  clearDeckFlip();
 
-  if (IS_DESKTOP && TAURI_WIN){
-    invoke('set_fullscreen', { on }).catch((e) => logBoot('imm: ' + e));
-  } else if (IS_ANDROID && HAS_ANDROID){
-    try { acall('hideStatusBar', { on: on ? true : !!S.hideBar }); } catch (_) {}
-  } else if (on){
-    if (document.documentElement.requestFullscreen){
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
-  } else if (document.fullscreenElement && document.exitFullscreen){
-    document.exitFullscreen().catch(() => {});
+  /* 旧位置必须在窗口变化前量 */
+  let oldRect = null, oldAt = null;
+  if (S.immMotion && $('platter') && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    oldRect = $('platter').getBoundingClientRect();
+    oldAt = viewOrigin();
   }
+
+  lockSwap();
+  /* invoke 回来时视口可能已经变了（resize 事件也许已经派发过）——见 settleResize */
+  const vw0 = window.innerWidth, vh0 = window.innerHeight;
+
+  /* 换版式的全部动作，放在一个幂等函数里：resize 先到就在回调里跑（同一帧），
+     没等到 resize 就由下面的兜底跑一次。 */
+  let applied = false;
+  const apply = () => {
+    if (applied) return;
+    applied = true;
+    if (seq !== immSeq) return;   // 已经被后一次切换接管
+    document.body.classList.toggle('immersive', on);
+    /* 控件高度随视口宽度变（左右内边距是 vw 的），--ctrl-h 默认由 RO 在下一帧
+       才更新；这里同步量一次，否则退出沉浸时面板会先用全屏的留白画几帧，
+       再"啪"地收一下 —— 又是一次切完之后的位移。 */
+    syncCtrlH();
+    lyricsView.center();
+    if (on){
+      showCtrlBar();
+    } else {
+      clearTimeout(ctrlTimer);
+      document.body.classList.remove('ctrl-hidden');
+    }
+    if (oldRect) flipDeck(oldRect, oldAt);
+  };
+
+  try {
+    if (IS_DESKTOP && TAURI_WIN){
+      await invoke('set_fullscreen', { on });
+    } else if (IS_ANDROID && HAS_ANDROID){
+      acall('hideStatusBar', { on: on ? true : !!S.hideBar });
+    } else if (on && document.documentElement.requestFullscreen){
+      await document.documentElement.requestFullscreen().catch(() => {});
+    } else if (!on && document.fullscreenElement && document.exitFullscreen){
+      await document.exitFullscreen().catch(() => {});
+    }
+  } catch (e) { logBoot('imm: ' + e); }
+
+  await settleResize(apply, () => window.innerWidth !== vw0 || window.innerHeight !== vh0);
+  apply();
+  if (seq !== immSeq) return;   // 后一次切换已经在跑了，这里不要弹提示 / 别改休眠
 
   if (on){
     keepAwake(true);
-    showCtrlBar();
     // 手机上没有键盘，别提示快捷键
     toast(IS_ANDROID || matchMedia('(hover:none)').matches
       ? '沉浸播放 · 再点一次退出'
       : '沉浸播放 · 按 F 或 Esc 退出');
   } else {
     keepAwake(false);
-    clearTimeout(ctrlTimer);
-    document.body.classList.remove('ctrl-hidden');
   }
+
+  /* --ctrl-h 的二次测量、RO 的二次居中可能晚一两帧，锁要盖到它们后面 */
+  setTimeout(unlockSwap, 260);
   logBoot('imm: ' + (on ? 'enter' : 'leave'));
 }
 
 if ($('immersiveBtn')) $('immersiveBtn').addEventListener('click', () => setImmersive(!immersive));
 window.addEventListener('pointermove', showCtrlBar, { passive: true });
 window.addEventListener('pointerdown', showCtrlBar, { passive: true });
-/* 浏览器里按 Esc 会自己退全屏，状态跟着同步一下 */
+/* 浏览器里按 Esc 会自己退全屏：视口已经变回去了，直接做一次无过渡的收尾，
+   不能再等 resize（否则会看到"小窗口 + 全屏版式"的中间态）。 */
 document.addEventListener('fullscreenchange', () => {
-  if (immersive && !document.fullscreenElement) setImmersive(false);
+  if (!immersive || document.fullscreenElement) return;
+  immersive = false;
+  const b = $('immersiveBtn');
+  if (b) b.setAttribute('aria-pressed', 'false');
+  clearDeckFlip();
+  lockSwap();
+  document.body.classList.remove('immersive');
+  document.body.classList.remove('ctrl-hidden');
+  syncCtrlH();
+  lyricsView.center();
+  clearTimeout(ctrlTimer);
+  keepAwake(false);
+  setTimeout(unlockSwap, 260);
+  logBoot('imm: leave(fs)');
 });
 /* 从后台回来重新申请 wake lock */
 document.addEventListener('visibilitychange', () => {
@@ -973,7 +1168,9 @@ if (!IS_ANDROID){
 }
 
 /* 底部控件是绝对定位的（见 panel.css），面板用 padding-bottom 给它留位，
-   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。 */
+   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。
+   沉浸切换那一帧要立刻拿到新值，所以这里暴露一个同步量法（见 syncCtrlH）。 */
+let syncCtrlH = () => {};
 const ctrlEl = document.querySelector('.controls');
 if (ctrlEl){
   let ctrlLast = -1, ctrlRaf = 0;
@@ -984,6 +1181,7 @@ if (ctrlEl){
   };
   // 首帧同步量一次，别让面板用默认留白闪一下
   setCtrlH(ctrlEl.offsetHeight);
+  syncCtrlH = () => setCtrlH(ctrlEl.offsetHeight);
   /* 之后走 rAF 合流 + 值比较：窗口剧变时 RO 和 resize 会在同一帧里连进来，
      回调里同步读 offsetHeight 会强制布局，一轮改一轮，正好是浏览器报
      "ResizeObserver loop completed with undelivered notifications" 的成因。 */
@@ -1161,6 +1359,10 @@ async function revealApp(){
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   document.body.classList.remove('booting');
   document.body.classList.add('boot-done');
+  // 揭幕过渡挂到 1.15s（panel 再加 90ms 延迟），放完就把 boot-reveal 摘掉：
+  // 不摘的话 .panel 会一直带着 1.15s 的 transform 过渡，后面沉浸切全屏
+  // 只要它身上有 transform 变化就会被拖慢（见 styles/boot.css 的说明）。
+  setTimeout(() => document.body.classList.remove('boot-reveal'), 1500);
 }
 
 /* ================= 启动 ================= */
@@ -1168,6 +1370,7 @@ async function boot(){
   loadPrefs();
   ensureFavorites();   // 「收藏」歌单先建出来，歌单页里始终在
   paintFav(currentTrack());
+  applyBg();           // 引导脚本已经上过了；这里保证状态和 DOM 一定一致
   // ?view=visual / ?view=lyrics 强制指定视图，调试和无头截图用
   try {
     const v = new URLSearchParams(location.search).get('view');

@@ -9,10 +9,11 @@
   /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
   padding-right:var(--pad-r);
   /* 底部给控件留出它自己的高度（JS 量出来塞进 --ctrl-h）：
-     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉，
-     于是歌词区的长大/收回是个 padding 过渡，而不是"控件突然离场"的硬跳。 */
+     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉。
+     **这里不能有过渡**：留白一变，flex:1 的歌词区高度跟着变，.lyric-track 的
+     居中线也就变了；再叠一层 padding 过渡，歌词会在窗口已经切完之后继续自己
+     滑 .42s，跟全屏那一刀对不上拍 —— 这正是以前"割裂"的一部分。 */
   padding-bottom:var(--ctrl-h,96px);
-  transition:padding-bottom .42s var(--ease);
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }
@@ -42,7 +43,7 @@
   width:32px;height:32px;border-radius:50%;
   display:grid;place-items:center;padding:0;
   border:1px solid rgba(246,234,217,.26);
-  background:rgba(20,6,8,.22);
+  background:hsl(var(--bg-h) 54% 5% / .22);
   color:rgba(246,234,217,.72);
   cursor:pointer;
   transition:color .25s var(--ease), border-color .25s var(--ease),
@@ -198,7 +199,7 @@ body.view-visual .visual{display:flex}
 .btn:disabled{opacity:.28;cursor:default;transform:none}
 .play{
   width:clamp(42px,5.2vh,54px);aspect-ratio:1;border-radius:50%;
-  background:var(--cream);color:#8b1e26;opacity:1;
+  background:var(--cream);color:hsl(var(--bg-h) 64% 33%);opacity:1;
   box-shadow:0 8px 22px -6px rgba(0,0,0,.6), inset 0 -2px 6px rgba(120,70,60,.25);
 }
 .play:hover{transform:scale(1.05)}
@@ -230,7 +231,7 @@ body.view-visual .visual{display:flex}
   background:var(--red);color:#fff;
   font-family:var(--mono);font-size:8px;font-weight:600;line-height:1;
   letter-spacing:0;opacity:1;transform:none;
-  box-shadow:0 0 0 1.5px rgba(20,4,7,.9);
+  box-shadow:0 0 0 1.5px hsl(var(--bg-h) 60% 4.7% / .9);
 }
 
 .meta{display:flex;align-items:center;gap:14px}

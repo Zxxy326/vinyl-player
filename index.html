@@ -28,6 +28,28 @@
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-l:env(safe-area-inset-left,0px);
   --safe-r:env(safe-area-inset-right,0px);
+  /* ---- 背景色板 ----
+     背景始终是同一块"绒布上的径向光"：左上打光、向右下压暗。换色只换色相，
+     五档的明度阶梯不变，所以换到任何颜色都还是同一种风格。
+     预设见文件末尾的 .pal-*；用户在设置里拖色相条时由脚本写 inline 变量。
+     --bg-h 同时给暗部（抽屉 / 弹窗 / 投影）取色，保证面板跟着背景走。 */
+  --bg-h:355;
+  --bg-1:#b8414a;--bg-2:#a02b33;--bg-3:#8b1e26;--bg-4:#6d141c;--bg-5:#4e0e15;
+}
+/* 由 --bg-h 派生的暗部色：必须声明在 body 上 —— 自定义色相是写在 body 的
+   inline 变量里的，让它在 body 这一层再解析一次，换色时面板才会跟着变 */
+body{
+  --vig:hsl(var(--bg-h) 76% 6% / .55);
+  --sheet-a:hsl(var(--bg-h) 56% 9.5% / .985);
+  --sheet-b:hsl(var(--bg-h) 60% 5.9% / .985);
+  --card-a:hsl(var(--bg-h) 53% 11.8% / .99);
+  --card-b:hsl(var(--bg-h) 55% 7% / .99);
+  --scrim:hsl(var(--bg-h) 60% 4.7% / .55);
+  --modal-scrim:hsl(var(--bg-h) 60% 2.4% / .62);
+  --toast-bg:hsl(var(--bg-h) 60% 4.3% / .92);
+  /* 唱片中心的红标也跟着色板走：明度固定，只换色相；
+     各色系对饱和度的耐受不一样（绿/蓝同样饱和度下更刺眼），由 .pal-* 微调 */
+  --label-sat:70%;
 }
 html,body{height:100%}
 body{
@@ -35,7 +57,7 @@ body{
   color:var(--cream);
   overflow:hidden;
   background:
-    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
+    radial-gradient(120% 90% at 18% 6%, var(--bg-1) 0%, var(--bg-2) 26%, var(--bg-3) 48%, var(--bg-4) 74%, var(--bg-5) 100%);
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
 }
@@ -48,7 +70,7 @@ body::before{
 }
 body::after{
   content:"";position:fixed;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:3;
-  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, rgba(30,4,8,.55) 100%);
+  background:radial-gradient(78% 70% at 30% 40%, transparent 40%, var(--vig) 100%);
 }
 
 .stage{
@@ -77,6 +99,17 @@ body::after{
 body.perf-low::before{display:none}
 body.perf-low .gloss{display:none}
 
+/* ============ 背景预设 ============
+   同一块绒布光，只换色相。五档的明度/饱和度按各自色系微调过（绿、蓝在
+   相同 HSL 下看着比红更亮，所以压了一点饱和度），但阶梯顺序完全一致。
+   这些类同时给设置里的色卡预览用：色卡自己带 .pal-*，背景才算得对。 */
+.pal-crimson{--bg-h:355;--bg-1:#b8414a;--bg-2:#a02b33;--bg-3:#8b1e26;--bg-4:#6d141c;--bg-5:#4e0e15;--label-sat:75%}
+.pal-amber  {--bg-h:26; --bg-1:#b37342;--bg-2:#9b5c2c;--bg-3:#844b1f;--bg-4:#663814;--bg-5:#49270e;--label-sat:74%}
+.pal-pine   {--bg-h:152;--bg-1:#4ba078;--bg-2:#338a61;--bg-3:#25744f;--bg-4:#1a5b3d;--bg-5:#11402a;--label-sat:58%}
+.pal-indigo {--bg-h:222;--bg-1:#4363ad;--bg-2:#2d4c95;--bg-3:#203c7e;--bg-4:#152b61;--bg-5:#0e1e44;--label-sat:62%}
+.pal-violet {--bg-h:288;--bg-1:#9646aa;--bg-2:#7f2f93;--bg-3:#6b217d;--bg-4:#50165f;--bg-5:#380f43;--label-sat:56%}
+.pal-charcoal{--bg-h:214;--bg-1:#686f78;--bg-2:#545b63;--bg-3:#434951;--bg-4:#32373e;--bg-5:#22262a;--label-sat:12%}
+
 
 /* styles/deck.css */
 /* ============ 左：唱机 ============ */
@@ -88,7 +121,7 @@ body.perf-low .gloss{display:none}
 .platter{
   position:relative;width:var(--disc);height:var(--disc);
   border-radius:50%;
-  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px rgba(38,0,6,.75), 0 0 0 1px rgba(0,0,0,.35);
+  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px hsl(var(--bg-h) 100% 7.5% / .75), 0 0 0 1px rgba(0,0,0,.35);
   cursor:grab;touch-action:none;
   -webkit-user-select:none;user-select:none;
 }
@@ -152,7 +185,12 @@ body.perf-low .gloss{display:none}
 /* 中心标：有封面时显示封面 */
 .label{
   position:absolute;top:33%;right:33%;bottom:33%;left:33%;border-radius:50%;
-  background:radial-gradient(circle at 50% 42%, #e33c46 0%, #d0262f 44%, #a5151e 100%);
+  /* 中心标跟背景同一色相：明度阶梯固定，只换色相与饱和度，
+     所以换配色时唱片"还是那张唱片"，只是压片颜色跟着换 */
+  background:radial-gradient(circle at 50% 42%,
+    hsl(var(--bg-h) var(--label-sat,70%) 56%) 0%,
+    hsl(var(--bg-h) var(--label-sat,70%) 48%) 44%,
+    hsl(var(--bg-h) var(--label-sat,70%) 36%) 100%);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.30), inset 0 2px 8px rgba(255,255,255,.12), 0 0 20px rgba(0,0,0,.6);
   display:grid;place-items:center;overflow:hidden;
 }
@@ -295,10 +333,11 @@ body.perf-low .gloss{display:none}
   /* 右边留 8px：收藏键悬停会 scale(1.06)，贴着 overflow:hidden 的边缘会被切掉一条 */
   padding-right:var(--pad-r);
   /* 底部给控件留出它自己的高度（JS 量出来塞进 --ctrl-h）：
-     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉，
-     于是歌词区的长大/收回是个 padding 过渡，而不是"控件突然离场"的硬跳。 */
+     控件永远是绝对定位浮在面板底部的，沉浸模式只是把这层留白收掉。
+     **这里不能有过渡**：留白一变，flex:1 的歌词区高度跟着变，.lyric-track 的
+     居中线也就变了；再叠一层 padding 过渡，歌词会在窗口已经切完之后继续自己
+     滑 .42s，跟全屏那一刀对不上拍 —— 这正是以前"割裂"的一部分。 */
   padding-bottom:var(--ctrl-h,96px);
-  transition:padding-bottom .42s var(--ease);
   border-left:1px solid rgba(246,234,217,.13);
   position:relative;
 }
@@ -328,7 +367,7 @@ body.perf-low .gloss{display:none}
   width:32px;height:32px;border-radius:50%;
   display:grid;place-items:center;padding:0;
   border:1px solid rgba(246,234,217,.26);
-  background:rgba(20,6,8,.22);
+  background:hsl(var(--bg-h) 54% 5% / .22);
   color:rgba(246,234,217,.72);
   cursor:pointer;
   transition:color .25s var(--ease), border-color .25s var(--ease),
@@ -484,7 +523,7 @@ body.view-visual .visual{display:flex}
 .btn:disabled{opacity:.28;cursor:default;transform:none}
 .play{
   width:clamp(42px,5.2vh,54px);aspect-ratio:1;border-radius:50%;
-  background:var(--cream);color:#8b1e26;opacity:1;
+  background:var(--cream);color:hsl(var(--bg-h) 64% 33%);opacity:1;
   box-shadow:0 8px 22px -6px rgba(0,0,0,.6), inset 0 -2px 6px rgba(120,70,60,.25);
 }
 .play:hover{transform:scale(1.05)}
@@ -516,7 +555,7 @@ body.view-visual .visual{display:flex}
   background:var(--red);color:#fff;
   font-family:var(--mono);font-size:8px;font-weight:600;line-height:1;
   letter-spacing:0;opacity:1;transform:none;
-  box-shadow:0 0 0 1.5px rgba(20,4,7,.9);
+  box-shadow:0 0 0 1.5px hsl(var(--bg-h) 60% 4.7% / .9);
 }
 
 .meta{display:flex;align-items:center;gap:14px}
@@ -553,7 +592,7 @@ body.view-visual .visual{display:flex}
 /* ============ 曲库抽屉 ============ */
 .sheet-scrim{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:29;
-  background:rgba(20,4,7,.55);
+  background:var(--scrim);
   opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
 }
 .sheet-scrim.open{opacity:1;pointer-events:auto}
@@ -561,7 +600,7 @@ body.view-visual .visual{display:flex}
 .sheet{
   position:fixed;z-index:30;
   display:flex;flex-direction:column;
-  background:linear-gradient(180deg, rgba(38,10,14,.985), rgba(24,6,9,.985));
+  background:linear-gradient(180deg, var(--sheet-a), var(--sheet-b));
   box-shadow:0 0 80px rgba(0,0,0,.6);
   transition:transform .38s cubic-bezier(.32,.72,.24,1);
   will-change:transform;
@@ -680,7 +719,7 @@ body.view-visual .visual{display:flex}
 .empty{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;
   display:none;place-items:center;
-  background:radial-gradient(70% 60% at 50% 45%, rgba(90,18,24,.86), rgba(30,6,10,.94));
+  background:radial-gradient(70% 60% at 50% 45%, hsl(var(--bg-h) 66% 21% / .86), hsl(var(--bg-h) 66% 7% / .94));
   backdrop-filter:blur(2px);
 }
 .empty.show{display:grid}
@@ -707,7 +746,7 @@ body.view-visual .visual{display:flex}
 }
 .empty-actions{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap}
 .cta{
-  background:var(--cream);color:#8b1e26;border:0;font:inherit;
+  background:var(--cream);color:hsl(var(--bg-h) 64% 33%);border:0;font:inherit;
   font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
   padding:12px 22px;border-radius:100px;cursor:pointer;
   box-shadow:0 10px 26px -10px rgba(0,0,0,.7);
@@ -724,7 +763,7 @@ body.view-visual .visual{display:flex}
 .toast{
   position:fixed;left:50%;bottom:34px;transform:translate(-50%,16px);
   z-index:60;padding:10px 18px;border-radius:100px;
-  background:rgba(18,4,7,.92);border:1px solid rgba(246,234,217,.18);
+  background:var(--toast-bg);border:1px solid rgba(246,234,217,.18);
   font-size:11.5px;letter-spacing:.04em;color:rgba(246,234,217,.9);
   opacity:0;pointer-events:none;transition:opacity .3s, transform .3s var(--ease);
   max-width:82vw;text-align:center;
@@ -876,6 +915,12 @@ body.view-visual .visual{display:flex}
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
+  /* 底部中间那句「DRAG TO SCRATCH」会正好压在唱片的圆底上：
+     横屏时唱片按 80vh 撑满，而零件行是挂在 .deck 下沿、与播放键同一条
+     中心线的，安全区（手势条）越大压得越多 —— 截图里那处重叠就是它。
+     左右两组零件在圆外，只有中间这句在圆内，所以跟竖屏一样把它收掉；
+     拖拽是直接上手转唱片，手机上不需要这句提示。 */
+  .hw.bc{display:none}
   .deck{--disc:min(80vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
@@ -1000,12 +1045,12 @@ body.perf-low .empty{backdrop-filter:none}
 /* 加入歌单选择层 */
 .plpick{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:60;display:grid;place-items:center;
-  background:rgba(12,3,5,.72);padding:24px;
+  background:hsl(var(--bg-h) 60% 3% / .72);padding:24px;
 }
 .plpick[hidden]{display:none}
 .plpick-box{
   width:min(320px,100%);display:flex;flex-direction:column;gap:10px;
-  background:linear-gradient(180deg,rgba(44,12,17,.99),rgba(26,7,10,.99));
+  background:linear-gradient(180deg,var(--card-a),var(--card-b));
   border:1px solid rgba(246,234,217,.14);border-radius:16px;
   padding:20px;box-shadow:0 30px 70px rgba(0,0,0,.6);
 }
@@ -1099,6 +1144,44 @@ body.perf-low .empty{backdrop-filter:none}
 .set-switch:active .sw-track i{width:17px}
 .lib-empty.small{padding:10px 12px;font-size:11px}
 
+/* 背景色卡：每颗自带 .pal-*，用该配色的三档画一个迷你"绒布光" */
+.bg-swatches{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 2px}
+.bg-swatch{
+  position:relative;flex:none;width:34px;height:34px;border-radius:50%;padding:0;
+  border:1px solid rgba(246,234,217,.22);cursor:pointer;
+  background:radial-gradient(120% 90% at 32% 22%, var(--bg-1) 0%, var(--bg-3) 52%, var(--bg-5) 100%);
+  box-shadow:0 6px 14px -6px rgba(0,0,0,.7);
+  transition:transform .2s var(--ease), border-color .2s, box-shadow .2s;
+}
+.bg-swatch:hover{transform:translateY(-1px) scale(1.06)}
+.bg-swatch:active{transform:scale(.96)}
+.bg-swatch.on{border-color:rgba(246,234,217,.85);box-shadow:0 0 0 2px rgba(246,234,217,.16)}
+.bg-swatch.on::after{
+  content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;
+  border-radius:50%;background:var(--cream);box-shadow:0 0 8px rgba(0,0,0,.45);
+}
+/* 自定义色相：一拖就切到自定义，色卡高亮由 JS 摘掉（不重绘，免得拖拽被重置） */
+.bg-hue{display:flex;align-items:center;gap:12px;margin-top:16px}
+.bg-hue span{
+  flex:none;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);
+}
+.bg-hue input{
+  flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:10px;border-radius:6px;
+  background:linear-gradient(90deg,#b8414a,#b37342,#4ba078,#4363ad,#9646aa,#b8414a);cursor:pointer;
+}
+.bg-hue input::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;border:0;
+  background:var(--cream);
+  box-shadow:0 0 0 2px hsl(var(--bg-h) 60% 5% / .55), 0 2px 6px rgba(0,0,0,.5);
+}
+/* 拖动时唯一会实时更新的东西：16px 的色点，重绘成本可以忽略 */
+.bg-hue-chip{
+  flex:none;width:16px;height:16px;border-radius:50%;
+  border:1px solid rgba(246,234,217,.28);
+  box-shadow:0 2px 6px rgba(0,0,0,.45);
+}
+
 /* 竖屏抽屉：页签横向可滚 */
 @media (orientation:portrait){
   .sheet-tabs{overflow-x:auto;scrollbar-width:none}
@@ -1119,9 +1202,11 @@ body.perf-low .empty{backdrop-filter:none}
   z-index:90;
   align-items:center;justify-content:flex-end;
   padding:0 12px;
-  background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
+  background:linear-gradient(180deg, hsl(var(--bg-h) 60% 6% / .72), hsl(var(--bg-h) 60% 6% / 0));
   -webkit-user-select:none;user-select:none;
-  /* 沉浸切换时标题栏是淡出的：没有过渡的话，它会在窗口跳全屏那一帧突然消失 */
+  /* 只服务于非沉浸场景的显隐（例如恢复窗口、显示/隐藏标题栏）。
+     沉浸切换那一下由 body.imm-swap 把过渡掐掉：那一刀要和窗口变尺寸同一帧，
+     留 .2s 反而会让它跨过切口慢慢淡，读起来是第二层动作。 */
   transition:opacity .2s var(--ease);
 }
 body.is-desktop .titlebar{display:flex}
@@ -1191,7 +1276,7 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 .modal{
   position:fixed;inset:0;z-index:120;
   display:grid;place-items:center;
-  background:rgba(10,2,4,.62);
+  background:var(--modal-scrim);
   backdrop-filter:blur(3px);
   opacity:0;pointer-events:none;transition:opacity .22s var(--ease);
 }
@@ -1199,7 +1284,7 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 .modal-card{
   width:min(380px,88vw);
   padding:24px 24px 18px;border-radius:16px;
-  background:linear-gradient(180deg, rgba(46,14,19,.99), rgba(28,8,11,.99));
+  background:linear-gradient(180deg, var(--card-a), var(--card-b));
   border:1px solid rgba(246,234,217,.14);
   box-shadow:0 30px 70px -20px rgba(0,0,0,.8);
   transform:translateY(8px) scale(.985);
@@ -1249,8 +1334,9 @@ body.immersive.ctrl-hidden,
 body.immersive.ctrl-hidden *{cursor:none}
 /* 沉浸：把面板底部的留白收掉，歌词区（flex:1）顺势长到控件底下。
    控件本身一直是绝对定位浮着的，位置不动，所以只有歌词区在长。
-   这里没有过渡 —— 它和窗口切全屏发生在同一帧，本来就看不出"跳"；
-   单独给它加过渡反而会在窗口变化时被 WebView2 丢掉，留个半截状态。 */
+   这里不能有过渡 —— 它和窗口切全屏必须在同一帧落定（见 main.js 的 setImmersive）。
+   面板留白一变，歌词区高度跟着变，居中线也得同一帧改完；留一点过渡，
+   歌词就会在窗口已经切完之后继续滑半秒。 */
 body.immersive .panel{padding-bottom:0}
 /* 以前这里压了一块同色渐变当蒙版，问题是底色是径向渐变，写死的暗红
    在右下角比周围更亮，就成了一块突兀的矩形。改成不放底色：
@@ -1272,10 +1358,26 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
 
+/* ---- 切换锁（body.imm-swap）----
+   setImmersive 在"调原生全屏 → 等 resize → 换版式"这整段里挂上，~260ms 后摘掉。
+   期间禁掉所有会自己动的过渡：
+   - .lyric-track 的 .62s 位移：切完版式 center() 会把当前句重新算一次，
+     有过渡的话这条线会从旧位置慢慢滑到新位置，和窗口那一刀错开半秒；
+   - 标题栏 / 控件：它们的淡出各自有 .3s/.45s 的钟，会跨过切口；
+   - .panel：留白同步变化后不该再有别的补间跟着动。
+   !important 是必要的：这些规则在 CSS 里分散于多处，靠顺序压不住。 */
+body.imm-swap .titlebar,
+body.imm-swap .controls,
+body.imm-swap .panel,
+body.imm-swap .lyric-track{transition:none!important}
+/* 唱片的放大过渡是 platter 上的 transform-only（见 main.js 的 flipDeck），
+   提前升级成合成层，免得第一帧才栅格化导致起手一顿；.42s 一过 JS 会摘掉这个类。 */
+.platter.imm-flipping{will-change:transform}
+
 /* 沉浸切换不留过渡层：切换是"窗口一帧跳全屏"，画布本身就是 fixed + inset:0，
    会跟着窗口一帧铺满，不需要任何遮罩去盖住中间态（详见 main.js 的 setImmersive）。
-   窗口 backgroundColor 已经改成 #0d0306，万一 WebView2 的表面比窗口慢一帧，
-   露出来的也是深色，读起来就是播放器的黑边。 */
+   窗口 backgroundColor 用 #140a0b（tauri.conf.json / Android themes.xml）：
+   中性近黑，比任何配色的暗角都深一档 —— 换了背景色也不会在边缘闪出红边。 */
 
 
 /* styles/boot.css */
@@ -1292,8 +1394,8 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:300;
   display:grid;place-items:center;
   background:
-    radial-gradient(120% 90% at 18% 6%, #b8414a 0%, #a02b33 26%, #8b1e26 48%, #6d141c 74%, #4e0e15 100%);
-  box-shadow:inset 0 0 220px rgba(26,3,7,.55);
+    radial-gradient(120% 90% at 18% 6%, var(--bg-1) 0%, var(--bg-2) 26%, var(--bg-3) 48%, var(--bg-4) 74%, var(--bg-5) 100%);
+  box-shadow:inset 0 0 220px var(--vig);
   opacity:1;visibility:visible;
   transition:opacity .85s var(--ease), visibility 0s linear .85s;
   -webkit-user-select:none;user-select:none;
@@ -1333,9 +1435,13 @@ body.boot-done .veil{opacity:0;visibility:hidden}
   background:linear-gradient(90deg,transparent,rgba(246,234,217,.42),transparent);
 }
 
-/* ---- 界面缓进 ---- */
-.deck,.panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
-.panel{transition-delay:.09s}
+/* ---- 界面缓进 ----
+   这两条过渡只服务于"启动幕化开"这一下，所以必须挂在 body.boot-reveal 上。
+   以前是裸的 .deck,.panel：boot.css 在打包顺序里排最后，等于给 .panel 永久
+   挂了一个 1.15s 的 transform/opacity 过渡，盖掉了 panel.css 自己的定义
+   （也让沉浸切换时那块留白"看起来有过渡"）。揭幕动画放完就把类摘掉。 */
+body.boot-reveal .deck,body.boot-reveal .panel{transition:opacity .95s var(--ease), transform 1.15s var(--ease)}
+body.boot-reveal .panel{transition-delay:.09s}
 body.booting .deck{opacity:0;transform:translateY(16px) scale(.992)}
 body.booting .panel{opacity:0;transform:translateY(12px)}
 /* 标题栏跟着幕一起出现（它本来就压在幕底下，不用单独做过渡） */
@@ -1345,12 +1451,46 @@ body.booting .stage{pointer-events:none}
 @media (prefers-reduced-motion:reduce){
   .veil-disc{animation:none}
   .veil-in{animation-duration:.01s}
-  .deck,.panel,.veil{transition-duration:.01s}
+  body.boot-reveal .deck,body.boot-reveal .panel,.veil{transition-duration:.01s}
 }
 
 </style>
 </head>
-<body class="booting">
+<!-- boot-reveal 只负责给揭幕那一下挂过渡（见 styles/boot.css），
+     放完 1.5s 由 main.js / 下面的兜底定时器摘掉，之后 .deck/.panel 身上
+     不再有任何"长期过渡"，沉浸切换才不会被它拖尾。 -->
+<body class="booting boot-reveal pal-crimson">
+<script>
+/* 背景色板要在首帧之前就位：否则选过绿色的人每次启动会先在启动幕上闪一下红色。
+   预设靠 .pal-* 类；自定义色相在这里算成五档 inline 变量 —— 阶梯和 CSS 里
+   预设用的一致（明度 49/40/33/25/18，饱和度 48/58/64/69/70）。
+   main.js 在用户改设置时复用同一个 window.__vpBgApply。 */
+(function(){
+  var KEYS = ['crimson', 'amber', 'pine', 'indigo', 'violet', 'charcoal'];
+  var b = document.body;
+  function stop(h, s, l){ return 'hsl(' + h + ' ' + s + '% ' + l + '%)'; }
+  window.__vpBgApply = function(bg, hue){
+    for (var i = 0; i < KEYS.length; i++) b.classList.remove('pal-' + KEYS[i]);
+    b.style.removeProperty('--bg-h');
+    for (var i = 1; i <= 5; i++) b.style.removeProperty('--bg-' + i);
+    if (bg === 'custom'){
+      var h = Math.round(hue || 0) % 360;
+      if (h < 0) h += 360;
+      var S = [48, 58, 64, 69, 70], L = [49, 40, 33, 25, 18];
+      for (var i = 0; i < 5; i++) b.style.setProperty('--bg-' + (i + 1), stop(h, S[i], L[i]));
+      b.style.setProperty('--bg-h', h);
+    } else {
+      b.classList.add('pal-' + (KEYS.indexOf(bg) >= 0 ? bg : 'crimson'));
+    }
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', getComputedStyle(b).getPropertyValue('--bg-3').trim());
+  };
+  try {
+    var p = JSON.parse(localStorage.getItem('vinyl-player/v2') || '{}');
+    window.__vpBgApply(p.bg || 'crimson', p.bgHue);
+  } catch (e) { window.__vpBgApply('crimson'); }
+})();
+</script>
 <audio id="audio" preload="auto"></audio>
 
 <!-- 启动幕：盖住 WebView 的首帧，等界面准备好再化开（见 styles/boot.css） -->
@@ -1367,6 +1507,7 @@ body.booting .stage{pointer-events:none}
 setTimeout(function(){
   document.body.classList.remove('booting');
   document.body.classList.add('boot-done');
+  setTimeout(function(){ document.body.classList.remove('boot-reveal'); }, 1500);
 }, 2600);
 </script>
 
@@ -1752,10 +1893,15 @@ const S = {
   folder: '',         // 桌面端上次的目录
   keepOn: false,      // 安卓：保持屏幕常亮
   hideBar: false,     // 安卓：隐藏顶部状态栏
+  immMotion: true,    // 沉浸切换：唱片 FLIP 放大（设置里可关）
+  bg: 'crimson',      // 背景色板：crimson|amber|pine|indigo|violet|charcoal|custom
+  bgHue: 355,         // 自定义背景的色相（0-360，仅 bg==='custom' 时生效）
   closeAction: 'ask'  // 桌面：关窗口时 'ask' | 'quit' | 'tray'
 };
 
-let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, closeAction: 'ask' };
+let prefs = { volume: .72, shuffle: false, repeat: 'all', view: 'lyrics', folder: '', resume: {}, playlists: [], keepOn: false, hideBar: false, immMotion: true, bg: 'crimson', bgHue: 355, closeAction: 'ask' };
+
+const BG_IDS = ['crimson', 'amber', 'pine', 'indigo', 'violet', 'charcoal'];
 
 function loadPrefs(){
   try {
@@ -1769,6 +1915,12 @@ function loadPrefs(){
   S.folder = prefs.folder || '';
   S.keepOn = !!prefs.keepOn;
   S.hideBar = !!prefs.hideBar;
+  // 没存过时默认开：这是沉浸切换的默认观感，存过 false 才关
+  S.immMotion = prefs.immMotion !== false;
+  // 背景：认预设 id，认不出来就回绯红；自定义色相夹到 0-360
+  S.bg = prefs.bg === 'custom' || BG_IDS.indexOf(prefs.bg) >= 0 ? prefs.bg : 'crimson';
+  S.bgHue = typeof prefs.bgHue === 'number' && isFinite(prefs.bgHue)
+    ? ((Math.round(prefs.bgHue) % 360) + 360) % 360 : 355;
   S.closeAction = (prefs.closeAction === 'quit' || prefs.closeAction === 'tray') ? prefs.closeAction : 'ask';
   return prefs;
 }
@@ -1781,6 +1933,9 @@ function savePrefs(){
   prefs.folder = S.folder;
   prefs.keepOn = !!S.keepOn;
   prefs.hideBar = !!S.hideBar;
+  prefs.immMotion = S.immMotion !== false;
+  prefs.bg = S.bg === 'custom' || BG_IDS.indexOf(S.bg) >= 0 ? S.bg : 'crimson';
+  prefs.bgHue = Math.round(S.bgHue || 0) % 360;
   prefs.closeAction = S.closeAction;
   try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) {}
 }
@@ -3082,8 +3237,11 @@ class LyricsView {
 
     // 布局稳定后重新居中：首帧 clientHeight 可能是 0，
     // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）。
-    // 沉浸切换时面板的 padding 是过渡动画，这里每帧都会回调，
+    // 沉浸切换时 main.js 会先把版式一帧换完再自己 center() 一次；
+    // 这里的回调是兜底（字体、换行、安卓 insets 造成的二次回流），
     // 用 rAF 合流，一帧最多量一次，免得手机上量出掉帧。
+    // 注意不能在切换时靠 .62s 的 transform 过渡把位置"补"过去 ——
+    // 那会让歌词在窗口已经切完之后继续滑，main.js 的 imm-swap 就是压它的。
     if (window.ResizeObserver){
       let raf = 0;
       this._ro = new ResizeObserver(() => {
@@ -3407,6 +3565,10 @@ class Transport {
 
 const TABS = ['tracks', 'albums', 'artists', 'playlists', 'settings'];
 
+/* 设置页色相条旁边那颗小圆点：和背景用同一套三档色阶，缩到 16px 也能看出结果 */
+const bgChip = (h) =>
+  'radial-gradient(120% 90% at 32% 22%, hsl(' + h + ' 48% 49%), hsl(' + h + ' 64% 33%) 52%, hsl(' + h + ' 70% 18%))';
+
 class Library {
   constructor(o){
     this.sheet = o.sheet;
@@ -3437,6 +3599,9 @@ class Library {
     this.volume = .72;
     this.keepOn = false;
     this.hideBar = false;
+    this.bg = 'crimson';
+    this.bgHue = 355;
+    this.appliedHue = null;   // custom 已经落地的色相（防止 pointerup/change 重复应用）
 
     this.searchInput = o.searchInput || null;
     this.searchClear = o.searchClear || null;
@@ -3481,6 +3646,19 @@ class Library {
     this.lists.artists.addEventListener('click', (e) => this.onGroupClick(e, 'artist'));
     this.lists.playlists.addEventListener('click', (e) => this.onPlaylistClick(e));
     this.lists.settings.addEventListener('click', (e) => this.onSettingsClick(e));
+    /* 色相条：拖动时只更新旁边那颗小色点，**不动整页背景**。
+       整页是一块全屏径向渐变 + 一堆 hsl(var(--bg-h)) 的暗部，手机 WebView
+       上每次 input 都重绘整屏会闪；松手才真正套用（change / pointerup 各兜一次）。 */
+    this.lists.settings.addEventListener('input', (e) => {
+      if (!e.target.classList || !e.target.classList.contains('bg-hue-range')) return;
+      this.previewBgHue(e.target, +e.target.value);
+    });
+    const commit = (e) => {
+      if (!e.target.classList || !e.target.classList.contains('bg-hue-range')) return;
+      this.commitBgHue(+e.target.value);
+    };
+    this.lists.settings.addEventListener('change', commit);
+    this.lists.settings.addEventListener('pointerup', commit);
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.open_){
@@ -3574,6 +3752,10 @@ class Library {
     if (this.opts.volume != null) this.volume = this.opts.volume;
     if (this.opts.keepOn != null) this.keepOn = !!this.opts.keepOn;
     if (this.opts.hideBar != null) this.hideBar = !!this.opts.hideBar;
+    if (this.opts.immMotion != null) this.immMotion = this.opts.immMotion !== false;
+    if (this.opts.bg) this.bg = this.opts.bg;
+    if (this.opts.bgHue != null) this.bgHue = this.opts.bgHue;
+    this.appliedHue = this.bg === 'custom' ? this.bgHue : null;
 
     if (this.lrcBtn) this.lrcBtn.hidden = !this.opts.showLrcImport;
     this.count.textContent = this.tracks.length ? this.tracks.length + ' 首' : '';
@@ -3864,6 +4046,29 @@ class Library {
         '<span class="sw-track"><i></i></span>' +
       '</button>';
 
+    /* 背景色卡：每个色卡自带 .pal-*，用该配色的三档画一个迷你绒布光 */
+    const bgPresets = [['crimson', '绯红'], ['amber', '琥珀'], ['pine', '松绿'],
+                       ['indigo', '藏蓝'], ['violet', '紫罗兰'], ['charcoal', '石墨']];
+    const bgNow = this.bg || 'crimson';
+    const bgGroup =
+      '<div class="set-group">' +
+        '<h3>背景</h3>' +
+        '<div class="bg-swatches">' +
+          bgPresets.map(([id, name]) =>
+            '<button class="bg-swatch pal-' + id + (bgNow === id ? ' on' : '') + '"' +
+              ' data-set="bg-' + id + '" title="' + name + '"' +
+              ' aria-label="背景：' + name + '" aria-pressed="' + (bgNow === id ? 'true' : 'false') + '"></button>'
+          ).join('') +
+        '</div>' +
+        '<div class="bg-hue">' +
+          '<span>自定义</span>' +
+          '<input class="bg-hue-range" type="range" min="0" max="360" step="1"' +
+            ' value="' + (this.bgHue == null ? 355 : this.bgHue) + '" aria-label="自定义背景色相">' +
+          '<i class="bg-hue-chip" style="background:' + bgChip(this.bgHue == null ? 355 : this.bgHue) + '"></i>' +
+        '</div>' +
+        '<p class="set-note">只换背景、唱片中心和暗部，文字/唱片本身不动；拖动色相条时看右边小圆点，松手才应用。</p>' +
+      '</div>';
+
     const screenGroup = platform === 'android'
       ? '<div class="set-group">' +
           '<h3>屏幕</h3>' +
@@ -3932,6 +4137,13 @@ class Library {
         '</div>' +
       '</div>' +
 
+      '<div class="set-group">' +
+        '<h3>动效</h3>' +
+        sw('imm-motion', this.immMotion !== false, '沉浸切换时唱片放大', '切全屏时唱片从原尺寸长到全屏；关掉则是直接切换') +
+      '</div>' +
+
+      bgGroup +
+
       notifGroup +
 
       screenGroup +
@@ -3953,6 +4165,25 @@ class Library {
     const b = e.target.closest('[data-set]');
     if (!b) return;
     this.hooks.onSetting(b.dataset.set);
+  }
+
+  /* 拖动色相条时的"只更新色点"：小圆点画的是这套色相在背景里的样子，
+     全屏背景等松手再换（见构造函数里的说明） */
+  previewBgHue(el, v){
+    this.bgHue = v;
+    const chip = el.parentNode && el.parentNode.querySelector('.bg-hue-chip');
+    if (chip) chip.style.background = bgChip(v);
+  }
+
+  /* 松手后真正应用：切到 custom、摘掉色卡高亮、通知上层换背景 */
+  commitBgHue(v){
+    if (this.bg === 'custom' && this.appliedHue === v) return;
+    this.bg = 'custom';
+    this.bgHue = v;
+    this.appliedHue = v;
+    const cards = this.lists.settings.querySelectorAll('.bg-swatch');
+    for (let i = 0; i < cards.length; i++) cards[i].classList.remove('on');
+    if (this.hooks.onBgHue) this.hooks.onBgHue(v);
   }
 
   /* 只更新播放态，避免整表重绘 */
@@ -4078,7 +4309,15 @@ const library = new Library({
     onAddToPlaylist: (trackId) => doAddToPlaylist(trackId),
     onPlaylistAction: (act, id) => doPlaylistAction(act, id),
     onRemoveFromPlaylist: (id, trackId) => doRemoveFromPlaylist(id, trackId),
-    onSetting: (key) => doSetting(key)
+    onSetting: (key) => doSetting(key),
+    /* 只在色相条松手时进来（拖动过程只更新设置页里的小色点），
+       所以这里可以放心地整页换色 + 立即落盘 */
+    onBgHue: (v) => {
+      S.bg = 'custom';
+      S.bgHue = v;
+      applyBg();
+      savePrefs();
+    }
   }
 });
 
@@ -4115,7 +4354,10 @@ function renderLib(extra){
     view: S.view,
     volume: S.volume,
     keepOn: S.keepOn,
-    hideBar: S.hideBar
+    hideBar: S.hideBar,
+    immMotion: S.immMotion,
+    bg: S.bg,
+    bgHue: currentBgHue()
   }, extra || {});
   library.render(S.tracks, S.index, S.playing, opts);
 }
@@ -4607,12 +4849,35 @@ function applyScreenPrefs(){
   try { acall('hideStatusBar', { on: !!S.hideBar }); } catch (_) {}
 }
 
+/* ================= 背景色板 =================
+   预设色卡是纯 CSS（.pal-*），真正把类/自定义色相写上去的是 index.html 里
+   那段引导脚本（它必须在首帧之前跑，否则启动幕会先闪一下默认红色）。
+   这里只是转调；入口保留一份兜底，免得脚本被裁掉时整页没背景。 */
+const BG_HUE = { crimson: 355, amber: 26, pine: 152, indigo: 222, violet: 288, charcoal: 214 };
+const BG_NAME = { crimson: '绯红', amber: '琥珀', pine: '松绿', indigo: '藏蓝', violet: '紫罗兰', charcoal: '石墨' };
+
+function currentBgHue(){
+  return S.bg === 'custom' ? S.bgHue : (BG_HUE[S.bg] != null ? BG_HUE[S.bg] : 355);
+}
+
+function applyBg(){
+  if (typeof window.__vpBgApply === 'function'){
+    window.__vpBgApply(S.bg, S.bgHue);
+    return;
+  }
+  document.body.className = document.body.className
+    .replace(/\bpal-[a-z]+\b/g, '').trim() + ' pal-' + (BG_HUE[S.bg] != null ? S.bg : 'crimson');
+}
+
 /* 设置页自己缓存了一份状态，改完要同步过去再重绘，否则界面还显示旧值 */
 function refreshSettings(){
   library.view = S.view;
   library.volume = S.volume;
   library.keepOn = S.keepOn;
   library.hideBar = S.hideBar;
+  library.immMotion = S.immMotion;
+  library.bg = S.bg;
+  library.bgHue = currentBgHue();
   library.closeAction = S.closeAction;
   library.renderSettings();
 }
@@ -4641,6 +4906,17 @@ function doSetting(key){
     applyScreenPrefs();
     refreshSettings();
     toast(S.hideBar ? '顶部状态栏 · 已隐藏' : '顶部状态栏 · 已显示');
+  } else if (key === 'imm-motion'){
+    S.immMotion = !S.immMotion;
+    savePrefs();
+    refreshSettings();
+    toast(S.immMotion ? '沉浸放大 · 已开启' : '沉浸放大 · 已关闭');
+  } else if (key.indexOf('bg-') === 0 && BG_NAME[key.slice(3)]){
+    S.bg = key.slice(3);
+    savePrefs();
+    applyBg();
+    refreshSettings();
+    toast('背景 · ' + BG_NAME[S.bg]);
   } else if (key === 'close-quit' || key === 'close-tray' || key === 'close-ask'){
     S.closeAction = key.slice(6);
     savePrefs();
@@ -4842,71 +5118,221 @@ function showCtrlBar(){
 
 /* 沉浸切换
    ========
-   **这一版没有过渡，一条都没有。** 前后试过五版自造过渡（暗场幕、钉住画布再放大、
-   逐帧推窗口、窗口先跳再长画布、两条计时器同步），全都比不做更难看。原因不在实现，
-   在**对象**：
+   窗口和内容必须在**同一帧**换完。上一版是"class 先切、invoke 后调"，注释里
+   假设"同一个任务里浏览器不会插一帧"——但 invoke 是跨 IPC 的异步调用，中间
+   必然按旧窗口尺寸先画 1~3 帧新版式，然后窗口再跳，读起来是两段。
 
-     .stage 是 position:fixed + inset:0，它**任何时候都铺满视口**；
-     --disc 也是从 vh/vw 算出来的（见 app.css 的断点）。
+   现在的顺序：
+     1. 记录旧唱片位置（FLIP 用），锁住所有会自己动的过渡（body.imm-swap）；
+     2. 先调原生全屏 / hideStatusBar，再等真实的 resize；
+     3. **在 resize 回调里**同步切 class、无过渡地重新居中歌词 —— resize 在绘制
+        之前派发，所以新版式和新尺寸一起提交，没有中间帧；窗口尺寸本来就不变时
+        最多等 4 帧后兜底执行；
+     4. 260ms 后解锁：盖住 --ctrl-h 的二次测量和 ResizeObserver 的二次居中，
+        否则歌词会在切完之后再自己滑 .62s（上一版"割裂"的主因）。
+   全屏本身仍是硬切，和 mpv / VLC 一样；不同的是切点之后没有任何东西还在动
+   （唯一在动的是可关掉的唱片放大，见 imm-motion）。 */
+/* immersive / wakeLock / ctrlTimer 在上面「沉浸播放」那一段已经声明过 */
+let swapLocked = false;
+let flipTimer = 0;
+let immSeq = 0;      // 连点两下时只让最后一次切换落地（见 setImmersive）
 
-   也就是说页面里根本不存在一个"从 A 尺寸长到 B 尺寸"的东西 —— 窗口一变，
-   布局、唱片、字号在同一帧就跟上了。我们一直在给一个**本来就没有过渡的对象**
-   硬造过渡，怎么调都别扭。
+/* 无边框窗口（Tauri 的 decorations:false）客户区和外框基本重合，
+   所以 screenX/screenY 就是客户区原点；网页版有标题栏，会有十几像素误差，
+   对一次 400ms 的放大过渡可以忽略。 */
+function viewOrigin(){
+  return {
+    x: typeof window.screenX === 'number' ? window.screenX : 0,
+    y: typeof window.screenY === 'number' ? window.screenY : 0
+  };
+}
 
-   视频播放器怎么做的（mpv / VLC / PotPlayer / MPC-HC，以及浏览器原生全屏）：
-   一个 SetWindowLongPtr(GWL_STYLE, WS_POPUP) + SetWindowPos 把窗口**一帧**切到
-   全屏，画面内容立即按新尺寸重排，窗口和内容都不做动画。它们唯一的动画是
-   "控件淡出" —— 也就是 .titlebar 和 body.ctrl-hidden 那两条 opacity 过渡。
+/* 切换那几帧：titlebar / controls / panel / lyric-track 一律不带过渡。
+   只挂一下，切换完成后由 unlockSwap 摘掉。 */
+function lockSwap(){
+  if (swapLocked) return;
+  swapLocked = true;
+  document.body.classList.add('imm-swap');
+}
+function unlockSwap(){
+  if (!swapLocked) return;
+  swapLocked = false;
+  document.body.classList.remove('imm-swap');
+}
 
-   所以照着做：切 class + 调一次 set_fullscreen，两件事在同一个同步任务里做完，
-   浏览器只绘制一次，没有中间帧可看。生硬感随之消失 —— 因为"生硬"本来就是
-   "看见了过渡"的副产品，没有过渡就没有这个评价。 */
-function setImmersive(on){
+/* 原生全屏是异步的：真来了 resize 就在**回调里立刻**换版式（resize 在绘制前派发，
+   所以新尺寸和新版式一起提交，中间不会有"大窗口 + 旧版式"的帧）；
+   窗口本来就是这个尺寸时最多等 4 帧再兜底执行。
+
+   `changed` 用来处理"resize 已经派发过"的情况：Tauri 的 invoke 要跨 IPC，
+   原生窗口可能已经变完、resize 也已经发出去，响应才回到 JS —— 这时再挂监听
+   就永远等不到它，只能白等 4 帧。视口尺寸已经不是旧值就直接换。 */
+function settleResize(apply, changed){
+  return new Promise((resolve) => {
+    let done = false;
+    const onResize = () => fin(true);
+    const fin = (fire) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('resize', onResize);
+      if (fire) apply();
+      resolve();
+    };
+    if (changed && changed()){
+      apply();
+      resolve();
+      return;
+    }
+    window.addEventListener('resize', onResize, { once: true });
+    let n = 4;
+    const tick = () => (--n <= 0 ? fin(false) : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  });
+}
+
+function clearDeckFlip(){
+  clearTimeout(flipTimer);
+  const platter = $('platter');
+  if (!platter) return;
+  platter.classList.remove('imm-flipping');
+  platter.style.transition = '';
+  platter.style.transform = '';
+}
+
+/* 唱片 FLIP：把新布局里的 .platter 反向套回旧唱片的屏幕位置，再过渡回 identity。
+   只动 transform（合成层），不碰宽高 / 边距 / padding，所以不会被窗口 resize
+   打断，也不需要逐帧推窗口。
+   动的是 .platter 而不是整块 .deck —— .deck 里还有一圈 hw 小标签和旋钮，
+   它们的字号是固定的，跟着一起缩放会在起手时"变小再长回来"；.platter 里
+   只有唱片和唱臂，整体等比，uniform scale 是精确的。 */
+function flipDeck(oldRect, oldAt){
+  const platter = $('platter');
+  if (!platter || !oldRect || !oldRect.width) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const n = platter.getBoundingClientRect();
+  if (!n.width) return;
+  const s = oldRect.width / n.width;
+  if (!(s > 0) || Math.abs(s - 1) < .02) return;   // 尺寸几乎没变（安卓只收状态栏）
+
+  clearTimeout(flipTimer);
+  const now = viewOrigin();
+  /* 旧 rect 是旧视口的坐标。屏幕上"窗口居中 → 全屏铺满"时，旧内容在屏幕上的
+     位置 = 旧视口坐标 + 旧窗口原点；再减掉新窗口原点就是新视口里的起点。 */
+  const ocx = oldRect.left + oldRect.width / 2 + oldAt.x - now.x;
+  const ocy = oldRect.top + oldRect.height / 2 + oldAt.y - now.y;
+  const ncx = n.left + n.width / 2;
+  const ncy = n.top + n.height / 2;
+
+  platter.classList.add('imm-flipping');
+  platter.style.transition = 'none';
+  /* 圆盘默认以自身中心为原点：先按中心缩到旧尺寸，再平移到旧圆心，
+     正好是第一帧的旧画面；过渡回 identity 就是"长到全屏"。 */
+  platter.style.transform =
+    'translate(' + (ocx - ncx) + 'px,' + (ocy - ncy) + 'px) scale(' + s + ')';
+  void platter.offsetWidth;                         // 起点先落定，别和终点合成一次
+  requestAnimationFrame(() => {
+    platter.style.transition = 'transform .42s cubic-bezier(.22,.72,.2,1)';
+    platter.style.transform = 'none';
+  });
+  flipTimer = setTimeout(clearDeckFlip, 520);
+}
+
+async function setImmersive(on){
   if (on === immersive) return;
   immersive = on;
+  /* 连点两下（比如进入后立刻退出）时，两次切换的 invoke 会并排跑；
+     只有最后发出的那次允许改版式，前一次回来时直接作废。 */
+  const seq = ++immSeq;
   const b = $('immersiveBtn');
   if (b) b.setAttribute('aria-pressed', String(on));
 
-  /* 顺序：先切 class，再动窗口。
-     先切 class 让版式（标题栏让位、顶部安全区从 36px 收到 14px）在窗口变大之前
-     就位，窗口撑开那一帧布局已经是终态，一次重排到位；反过来会先按旧版式铺满、
-     再跳一下，就是二段感。
-     两个调用之间不 await —— 同一个任务里浏览器不会插一帧进来。 */
-  document.body.classList.toggle('immersive', on);
+  clearDeckFlip();
 
-  if (IS_DESKTOP && TAURI_WIN){
-    invoke('set_fullscreen', { on }).catch((e) => logBoot('imm: ' + e));
-  } else if (IS_ANDROID && HAS_ANDROID){
-    try { acall('hideStatusBar', { on: on ? true : !!S.hideBar }); } catch (_) {}
-  } else if (on){
-    if (document.documentElement.requestFullscreen){
-      document.documentElement.requestFullscreen().catch(() => {});
-    }
-  } else if (document.fullscreenElement && document.exitFullscreen){
-    document.exitFullscreen().catch(() => {});
+  /* 旧位置必须在窗口变化前量 */
+  let oldRect = null, oldAt = null;
+  if (S.immMotion && $('platter') && !matchMedia('(prefers-reduced-motion: reduce)').matches){
+    oldRect = $('platter').getBoundingClientRect();
+    oldAt = viewOrigin();
   }
+
+  lockSwap();
+  /* invoke 回来时视口可能已经变了（resize 事件也许已经派发过）——见 settleResize */
+  const vw0 = window.innerWidth, vh0 = window.innerHeight;
+
+  /* 换版式的全部动作，放在一个幂等函数里：resize 先到就在回调里跑（同一帧），
+     没等到 resize 就由下面的兜底跑一次。 */
+  let applied = false;
+  const apply = () => {
+    if (applied) return;
+    applied = true;
+    if (seq !== immSeq) return;   // 已经被后一次切换接管
+    document.body.classList.toggle('immersive', on);
+    /* 控件高度随视口宽度变（左右内边距是 vw 的），--ctrl-h 默认由 RO 在下一帧
+       才更新；这里同步量一次，否则退出沉浸时面板会先用全屏的留白画几帧，
+       再"啪"地收一下 —— 又是一次切完之后的位移。 */
+    syncCtrlH();
+    lyricsView.center();
+    if (on){
+      showCtrlBar();
+    } else {
+      clearTimeout(ctrlTimer);
+      document.body.classList.remove('ctrl-hidden');
+    }
+    if (oldRect) flipDeck(oldRect, oldAt);
+  };
+
+  try {
+    if (IS_DESKTOP && TAURI_WIN){
+      await invoke('set_fullscreen', { on });
+    } else if (IS_ANDROID && HAS_ANDROID){
+      acall('hideStatusBar', { on: on ? true : !!S.hideBar });
+    } else if (on && document.documentElement.requestFullscreen){
+      await document.documentElement.requestFullscreen().catch(() => {});
+    } else if (!on && document.fullscreenElement && document.exitFullscreen){
+      await document.exitFullscreen().catch(() => {});
+    }
+  } catch (e) { logBoot('imm: ' + e); }
+
+  await settleResize(apply, () => window.innerWidth !== vw0 || window.innerHeight !== vh0);
+  apply();
+  if (seq !== immSeq) return;   // 后一次切换已经在跑了，这里不要弹提示 / 别改休眠
 
   if (on){
     keepAwake(true);
-    showCtrlBar();
     // 手机上没有键盘，别提示快捷键
     toast(IS_ANDROID || matchMedia('(hover:none)').matches
       ? '沉浸播放 · 再点一次退出'
       : '沉浸播放 · 按 F 或 Esc 退出');
   } else {
     keepAwake(false);
-    clearTimeout(ctrlTimer);
-    document.body.classList.remove('ctrl-hidden');
   }
+
+  /* --ctrl-h 的二次测量、RO 的二次居中可能晚一两帧，锁要盖到它们后面 */
+  setTimeout(unlockSwap, 260);
   logBoot('imm: ' + (on ? 'enter' : 'leave'));
 }
 
 if ($('immersiveBtn')) $('immersiveBtn').addEventListener('click', () => setImmersive(!immersive));
 window.addEventListener('pointermove', showCtrlBar, { passive: true });
 window.addEventListener('pointerdown', showCtrlBar, { passive: true });
-/* 浏览器里按 Esc 会自己退全屏，状态跟着同步一下 */
+/* 浏览器里按 Esc 会自己退全屏：视口已经变回去了，直接做一次无过渡的收尾，
+   不能再等 resize（否则会看到"小窗口 + 全屏版式"的中间态）。 */
 document.addEventListener('fullscreenchange', () => {
-  if (immersive && !document.fullscreenElement) setImmersive(false);
+  if (!immersive || document.fullscreenElement) return;
+  immersive = false;
+  const b = $('immersiveBtn');
+  if (b) b.setAttribute('aria-pressed', 'false');
+  clearDeckFlip();
+  lockSwap();
+  document.body.classList.remove('immersive');
+  document.body.classList.remove('ctrl-hidden');
+  syncCtrlH();
+  lyricsView.center();
+  clearTimeout(ctrlTimer);
+  keepAwake(false);
+  setTimeout(unlockSwap, 260);
+  logBoot('imm: leave(fs)');
 });
 /* 从后台回来重新申请 wake lock */
 document.addEventListener('visibilitychange', () => {
@@ -4977,7 +5403,9 @@ if (!IS_ANDROID){
 }
 
 /* 底部控件是绝对定位的（见 panel.css），面板用 padding-bottom 给它留位，
-   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。 */
+   高度只能量：视口宽高、字体、是否显示转速铭牌都会影响它。
+   沉浸切换那一帧要立刻拿到新值，所以这里暴露一个同步量法（见 syncCtrlH）。 */
+let syncCtrlH = () => {};
 const ctrlEl = document.querySelector('.controls');
 if (ctrlEl){
   let ctrlLast = -1, ctrlRaf = 0;
@@ -4988,6 +5416,7 @@ if (ctrlEl){
   };
   // 首帧同步量一次，别让面板用默认留白闪一下
   setCtrlH(ctrlEl.offsetHeight);
+  syncCtrlH = () => setCtrlH(ctrlEl.offsetHeight);
   /* 之后走 rAF 合流 + 值比较：窗口剧变时 RO 和 resize 会在同一帧里连进来，
      回调里同步读 offsetHeight 会强制布局，一轮改一轮，正好是浏览器报
      "ResizeObserver loop completed with undelivered notifications" 的成因。 */
@@ -5165,6 +5594,10 @@ async function revealApp(){
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   document.body.classList.remove('booting');
   document.body.classList.add('boot-done');
+  // 揭幕过渡挂到 1.15s（panel 再加 90ms 延迟），放完就把 boot-reveal 摘掉：
+  // 不摘的话 .panel 会一直带着 1.15s 的 transform 过渡，后面沉浸切全屏
+  // 只要它身上有 transform 变化就会被拖慢（见 styles/boot.css 的说明）。
+  setTimeout(() => document.body.classList.remove('boot-reveal'), 1500);
 }
 
 /* ================= 启动 ================= */
@@ -5172,6 +5605,7 @@ async function boot(){
   loadPrefs();
   ensureFavorites();   // 「收藏」歌单先建出来，歌单页里始终在
   paintFav(currentTrack());
+  applyBg();           // 引导脚本已经上过了；这里保证状态和 DOM 一定一致
   // ?view=visual / ?view=lyrics 强制指定视图，调试和无头截图用
   try {
     const v = new URLSearchParams(location.search).get('view');

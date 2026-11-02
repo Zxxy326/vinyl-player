@@ -1,7 +1,7 @@
 /* ============ 曲库抽屉 ============ */
 .sheet-scrim{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:29;
-  background:rgba(20,4,7,.55);
+  background:var(--scrim);
   opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
 }
 .sheet-scrim.open{opacity:1;pointer-events:auto}
@@ -9,7 +9,7 @@
 .sheet{
   position:fixed;z-index:30;
   display:flex;flex-direction:column;
-  background:linear-gradient(180deg, rgba(38,10,14,.985), rgba(24,6,9,.985));
+  background:linear-gradient(180deg, var(--sheet-a), var(--sheet-b));
   box-shadow:0 0 80px rgba(0,0,0,.6);
   transition:transform .38s cubic-bezier(.32,.72,.24,1);
   will-change:transform;
@@ -128,7 +128,7 @@
 .empty{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;
   display:none;place-items:center;
-  background:radial-gradient(70% 60% at 50% 45%, rgba(90,18,24,.86), rgba(30,6,10,.94));
+  background:radial-gradient(70% 60% at 50% 45%, hsl(var(--bg-h) 66% 21% / .86), hsl(var(--bg-h) 66% 7% / .94));
   backdrop-filter:blur(2px);
 }
 .empty.show{display:grid}
@@ -155,7 +155,7 @@
 }
 .empty-actions{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap}
 .cta{
-  background:var(--cream);color:#8b1e26;border:0;font:inherit;
+  background:var(--cream);color:hsl(var(--bg-h) 64% 33%);border:0;font:inherit;
   font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
   padding:12px 22px;border-radius:100px;cursor:pointer;
   box-shadow:0 10px 26px -10px rgba(0,0,0,.7);
@@ -172,7 +172,7 @@
 .toast{
   position:fixed;left:50%;bottom:34px;transform:translate(-50%,16px);
   z-index:60;padding:10px 18px;border-radius:100px;
-  background:rgba(18,4,7,.92);border:1px solid rgba(246,234,217,.18);
+  background:var(--toast-bg);border:1px solid rgba(246,234,217,.18);
   font-size:11.5px;letter-spacing:.04em;color:rgba(246,234,217,.9);
   opacity:0;pointer-events:none;transition:opacity .3s, transform .3s var(--ease);
   max-width:82vw;text-align:center;
@@ -324,6 +324,12 @@
       calc(var(--safe-b) + 10px)
       calc(var(--safe-l) + 18px);
   }
+  /* 底部中间那句「DRAG TO SCRATCH」会正好压在唱片的圆底上：
+     横屏时唱片按 80vh 撑满，而零件行是挂在 .deck 下沿、与播放键同一条
+     中心线的，安全区（手势条）越大压得越多 —— 截图里那处重叠就是它。
+     左右两组零件在圆外，只有中间这句在圆内，所以跟竖屏一样把它收掉；
+     拖拽是直接上手转唱片，手机上不需要这句提示。 */
+  .hw.bc{display:none}
   .deck{--disc:min(80vh,34vw)}
   .title{font-size:24px;margin-top:6px}
   .artist{margin-top:6px}
@@ -448,12 +454,12 @@ body.perf-low .empty{backdrop-filter:none}
 /* 加入歌单选择层 */
 .plpick{
   position:fixed;top:0;right:0;bottom:0;left:0;z-index:60;display:grid;place-items:center;
-  background:rgba(12,3,5,.72);padding:24px;
+  background:hsl(var(--bg-h) 60% 3% / .72);padding:24px;
 }
 .plpick[hidden]{display:none}
 .plpick-box{
   width:min(320px,100%);display:flex;flex-direction:column;gap:10px;
-  background:linear-gradient(180deg,rgba(44,12,17,.99),rgba(26,7,10,.99));
+  background:linear-gradient(180deg,var(--card-a),var(--card-b));
   border:1px solid rgba(246,234,217,.14);border-radius:16px;
   padding:20px;box-shadow:0 30px 70px rgba(0,0,0,.6);
 }
@@ -546,6 +552,44 @@ body.perf-low .empty{backdrop-filter:none}
 .set-switch[aria-pressed="true"] .sw-track i{transform:translateX(15px);background:#fff4ea}
 .set-switch:active .sw-track i{width:17px}
 .lib-empty.small{padding:10px 12px;font-size:11px}
+
+/* 背景色卡：每颗自带 .pal-*，用该配色的三档画一个迷你"绒布光" */
+.bg-swatches{display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 2px}
+.bg-swatch{
+  position:relative;flex:none;width:34px;height:34px;border-radius:50%;padding:0;
+  border:1px solid rgba(246,234,217,.22);cursor:pointer;
+  background:radial-gradient(120% 90% at 32% 22%, var(--bg-1) 0%, var(--bg-3) 52%, var(--bg-5) 100%);
+  box-shadow:0 6px 14px -6px rgba(0,0,0,.7);
+  transition:transform .2s var(--ease), border-color .2s, box-shadow .2s;
+}
+.bg-swatch:hover{transform:translateY(-1px) scale(1.06)}
+.bg-swatch:active{transform:scale(.96)}
+.bg-swatch.on{border-color:rgba(246,234,217,.85);box-shadow:0 0 0 2px rgba(246,234,217,.16)}
+.bg-swatch.on::after{
+  content:"";position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;
+  border-radius:50%;background:var(--cream);box-shadow:0 0 8px rgba(0,0,0,.45);
+}
+/* 自定义色相：一拖就切到自定义，色卡高亮由 JS 摘掉（不重绘，免得拖拽被重置） */
+.bg-hue{display:flex;align-items:center;gap:12px;margin-top:16px}
+.bg-hue span{
+  flex:none;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(246,234,217,.42);
+}
+.bg-hue input{
+  flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:10px;border-radius:6px;
+  background:linear-gradient(90deg,#b8414a,#b37342,#4ba078,#4363ad,#9646aa,#b8414a);cursor:pointer;
+}
+.bg-hue input::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;border:0;
+  background:var(--cream);
+  box-shadow:0 0 0 2px hsl(var(--bg-h) 60% 5% / .55), 0 2px 6px rgba(0,0,0,.5);
+}
+/* 拖动时唯一会实时更新的东西：16px 的色点，重绘成本可以忽略 */
+.bg-hue-chip{
+  flex:none;width:16px;height:16px;border-radius:50%;
+  border:1px solid rgba(246,234,217,.28);
+  box-shadow:0 2px 6px rgba(0,0,0,.45);
+}
 
 /* 竖屏抽屉：页签横向可滚 */
 @media (orientation:portrait){

@@ -95,10 +95,10 @@ class MainActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        web.setBackgroundColor(0xFF8B1E26.toInt())
+        web.setBackgroundColor(0xFF140A0B.toInt())
 
         host = FrameLayout(this)
-        host.setBackgroundColor(0xFF8B1E26.toInt())
+        host.setBackgroundColor(0xFF140A0B.toInt())
         host.addView(web, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT

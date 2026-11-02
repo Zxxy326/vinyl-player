@@ -13,8 +13,11 @@ export class LyricsView {
 
     // 布局稳定后重新居中：首帧 clientHeight 可能是 0，
     // 只在 setActive 时算一次会永远停在顶部（原版的既有问题）。
-    // 沉浸切换时面板的 padding 是过渡动画，这里每帧都会回调，
+    // 沉浸切换时 main.js 会先把版式一帧换完再自己 center() 一次；
+    // 这里的回调是兜底（字体、换行、安卓 insets 造成的二次回流），
     // 用 rAF 合流，一帧最多量一次，免得手机上量出掉帧。
+    // 注意不能在切换时靠 .62s 的 transform 过渡把位置"补"过去 ——
+    // 那会让歌词在窗口已经切完之后继续滑，main.js 的 imm-swap 就是压它的。
     if (window.ResizeObserver){
       let raf = 0;
       this._ro = new ResizeObserver(() => {

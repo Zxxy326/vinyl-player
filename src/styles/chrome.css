@@ -8,9 +8,11 @@
   z-index:90;
   align-items:center;justify-content:flex-end;
   padding:0 12px;
-  background:linear-gradient(180deg, rgba(24,6,9,.72), rgba(24,6,9,0));
+  background:linear-gradient(180deg, hsl(var(--bg-h) 60% 6% / .72), hsl(var(--bg-h) 60% 6% / 0));
   -webkit-user-select:none;user-select:none;
-  /* 沉浸切换时标题栏是淡出的：没有过渡的话，它会在窗口跳全屏那一帧突然消失 */
+  /* 只服务于非沉浸场景的显隐（例如恢复窗口、显示/隐藏标题栏）。
+     沉浸切换那一下由 body.imm-swap 把过渡掐掉：那一刀要和窗口变尺寸同一帧，
+     留 .2s 反而会让它跨过切口慢慢淡，读起来是第二层动作。 */
   transition:opacity .2s var(--ease);
 }
 body.is-desktop .titlebar{display:flex}
@@ -80,7 +82,7 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 .modal{
   position:fixed;inset:0;z-index:120;
   display:grid;place-items:center;
-  background:rgba(10,2,4,.62);
+  background:var(--modal-scrim);
   backdrop-filter:blur(3px);
   opacity:0;pointer-events:none;transition:opacity .22s var(--ease);
 }
@@ -88,7 +90,7 @@ body.is-desktop{--tb-h:36px;--safe-t:36px}
 .modal-card{
   width:min(380px,88vw);
   padding:24px 24px 18px;border-radius:16px;
-  background:linear-gradient(180deg, rgba(46,14,19,.99), rgba(28,8,11,.99));
+  background:linear-gradient(180deg, var(--card-a), var(--card-b));
   border:1px solid rgba(246,234,217,.14);
   box-shadow:0 30px 70px -20px rgba(0,0,0,.8);
   transform:translateY(8px) scale(.985);
@@ -138,8 +140,9 @@ body.immersive.ctrl-hidden,
 body.immersive.ctrl-hidden *{cursor:none}
 /* 沉浸：把面板底部的留白收掉，歌词区（flex:1）顺势长到控件底下。
    控件本身一直是绝对定位浮着的，位置不动，所以只有歌词区在长。
-   这里没有过渡 —— 它和窗口切全屏发生在同一帧，本来就看不出"跳"；
-   单独给它加过渡反而会在窗口变化时被 WebView2 丢掉，留个半截状态。 */
+   这里不能有过渡 —— 它和窗口切全屏必须在同一帧落定（见 main.js 的 setImmersive）。
+   面板留白一变，歌词区高度跟着变，居中线也得同一帧改完；留一点过渡，
+   歌词就会在窗口已经切完之后继续滑半秒。 */
 body.immersive .panel{padding-bottom:0}
 /* 以前这里压了一块同色渐变当蒙版，问题是底色是径向渐变，写死的暗红
    在右下角比周围更亮，就成了一块突兀的矩形。改成不放底色：
@@ -161,7 +164,23 @@ body.immersive .controls{border-top-color:rgba(246,234,217,.07)}
 #immersiveBtn[aria-pressed="true"]{color:var(--cream)}
 #immersiveBtn[aria-pressed="true"] svg{filter:drop-shadow(0 0 6px rgba(255,220,190,.5))}
 
+/* ---- 切换锁（body.imm-swap）----
+   setImmersive 在"调原生全屏 → 等 resize → 换版式"这整段里挂上，~260ms 后摘掉。
+   期间禁掉所有会自己动的过渡：
+   - .lyric-track 的 .62s 位移：切完版式 center() 会把当前句重新算一次，
+     有过渡的话这条线会从旧位置慢慢滑到新位置，和窗口那一刀错开半秒；
+   - 标题栏 / 控件：它们的淡出各自有 .3s/.45s 的钟，会跨过切口；
+   - .panel：留白同步变化后不该再有别的补间跟着动。
+   !important 是必要的：这些规则在 CSS 里分散于多处，靠顺序压不住。 */
+body.imm-swap .titlebar,
+body.imm-swap .controls,
+body.imm-swap .panel,
+body.imm-swap .lyric-track{transition:none!important}
+/* 唱片的放大过渡是 platter 上的 transform-only（见 main.js 的 flipDeck），
+   提前升级成合成层，免得第一帧才栅格化导致起手一顿；.42s 一过 JS 会摘掉这个类。 */
+.platter.imm-flipping{will-change:transform}
+
 /* 沉浸切换不留过渡层：切换是"窗口一帧跳全屏"，画布本身就是 fixed + inset:0，
    会跟着窗口一帧铺满，不需要任何遮罩去盖住中间态（详见 main.js 的 setImmersive）。
-   窗口 backgroundColor 已经改成 #0d0306，万一 WebView2 的表面比窗口慢一帧，
-   露出来的也是深色，读起来就是播放器的黑边。 */
+   窗口 backgroundColor 用 #140a0b（tauri.conf.json / Android themes.xml）：
+   中性近黑，比任何配色的暗角都深一档 —— 换了背景色也不会在边缘闪出红边。 */

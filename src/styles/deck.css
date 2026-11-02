@@ -7,7 +7,7 @@
 .platter{
   position:relative;width:var(--disc);height:var(--disc);
   border-radius:50%;
-  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px rgba(38,0,6,.75), 0 0 0 1px rgba(0,0,0,.35);
+  box-shadow:0 44px 70px -28px rgba(0,0,0,.85), 0 26px 90px -20px hsl(var(--bg-h) 100% 7.5% / .75), 0 0 0 1px rgba(0,0,0,.35);
   cursor:grab;touch-action:none;
   -webkit-user-select:none;user-select:none;
 }
@@ -71,7 +71,12 @@
 /* 中心标：有封面时显示封面 */
 .label{
   position:absolute;top:33%;right:33%;bottom:33%;left:33%;border-radius:50%;
-  background:radial-gradient(circle at 50% 42%, #e33c46 0%, #d0262f 44%, #a5151e 100%);
+  /* 中心标跟背景同一色相：明度阶梯固定，只换色相与饱和度，
+     所以换配色时唱片"还是那张唱片"，只是压片颜色跟着换 */
+  background:radial-gradient(circle at 50% 42%,
+    hsl(var(--bg-h) var(--label-sat,70%) 56%) 0%,
+    hsl(var(--bg-h) var(--label-sat,70%) 48%) 44%,
+    hsl(var(--bg-h) var(--label-sat,70%) 36%) 100%);
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.30), inset 0 2px 8px rgba(255,255,255,.12), 0 0 20px rgba(0,0,0,.6);
   display:grid;place-items:center;overflow:hidden;
 }

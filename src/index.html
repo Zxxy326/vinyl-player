@@ -13,7 +13,41 @@
 /*__STYLES__*/
 </style>
 </head>
-<body class="booting">
+<!-- boot-reveal 只负责给揭幕那一下挂过渡（见 styles/boot.css），
+     放完 1.5s 由 main.js / 下面的兜底定时器摘掉，之后 .deck/.panel 身上
+     不再有任何"长期过渡"，沉浸切换才不会被它拖尾。 -->
+<body class="booting boot-reveal pal-crimson">
+<script>
+/* 背景色板要在首帧之前就位：否则选过绿色的人每次启动会先在启动幕上闪一下红色。
+   预设靠 .pal-* 类；自定义色相在这里算成五档 inline 变量 —— 阶梯和 CSS 里
+   预设用的一致（明度 49/40/33/25/18，饱和度 48/58/64/69/70）。
+   main.js 在用户改设置时复用同一个 window.__vpBgApply。 */
+(function(){
+  var KEYS = ['crimson', 'amber', 'pine', 'indigo', 'violet', 'charcoal'];
+  var b = document.body;
+  function stop(h, s, l){ return 'hsl(' + h + ' ' + s + '% ' + l + '%)'; }
+  window.__vpBgApply = function(bg, hue){
+    for (var i = 0; i < KEYS.length; i++) b.classList.remove('pal-' + KEYS[i]);
+    b.style.removeProperty('--bg-h');
+    for (var i = 1; i <= 5; i++) b.style.removeProperty('--bg-' + i);
+    if (bg === 'custom'){
+      var h = Math.round(hue || 0) % 360;
+      if (h < 0) h += 360;
+      var S = [48, 58, 64, 69, 70], L = [49, 40, 33, 25, 18];
+      for (var i = 0; i < 5; i++) b.style.setProperty('--bg-' + (i + 1), stop(h, S[i], L[i]));
+      b.style.setProperty('--bg-h', h);
+    } else {
+      b.classList.add('pal-' + (KEYS.indexOf(bg) >= 0 ? bg : 'crimson'));
+    }
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', getComputedStyle(b).getPropertyValue('--bg-3').trim());
+  };
+  try {
+    var p = JSON.parse(localStorage.getItem('vinyl-player/v2') || '{}');
+    window.__vpBgApply(p.bg || 'crimson', p.bgHue);
+  } catch (e) { window.__vpBgApply('crimson'); }
+})();
+</script>
 <audio id="audio" preload="auto"></audio>
 
 <!-- 启动幕：盖住 WebView 的首帧，等界面准备好再化开（见 styles/boot.css） -->
@@ -30,6 +64,7 @@
 setTimeout(function(){
   document.body.classList.remove('booting');
   document.body.classList.add('boot-done');
+  setTimeout(function(){ document.body.classList.remove('boot-reveal'); }, 1500);
 }, 2600);
 </script>
 

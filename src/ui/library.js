@@ -6,6 +6,10 @@ import { allTrackStats, summary } from '../core/stats.js';
 
 const TABS = ['tracks', 'albums', 'artists', 'playlists', 'settings'];
 
+/* 设置页色相条旁边那颗小圆点：和背景用同一套三档色阶，缩到 16px 也能看出结果 */
+const bgChip = (h) =>
+  'radial-gradient(120% 90% at 32% 22%, hsl(' + h + ' 48% 49%), hsl(' + h + ' 64% 33%) 52%, hsl(' + h + ' 70% 18%))';
+
 export class Library {
   constructor(o){
     this.sheet = o.sheet;
@@ -36,6 +40,9 @@ export class Library {
     this.volume = .72;
     this.keepOn = false;
     this.hideBar = false;
+    this.bg = 'crimson';
+    this.bgHue = 355;
+    this.appliedHue = null;   // custom 已经落地的色相（防止 pointerup/change 重复应用）
 
     this.searchInput = o.searchInput || null;
     this.searchClear = o.searchClear || null;
@@ -80,6 +87,19 @@ export class Library {
     this.lists.artists.addEventListener('click', (e) => this.onGroupClick(e, 'artist'));
     this.lists.playlists.addEventListener('click', (e) => this.onPlaylistClick(e));
     this.lists.settings.addEventListener('click', (e) => this.onSettingsClick(e));
+    /* 色相条：拖动时只更新旁边那颗小色点，**不动整页背景**。
+       整页是一块全屏径向渐变 + 一堆 hsl(var(--bg-h)) 的暗部，手机 WebView
+       上每次 input 都重绘整屏会闪；松手才真正套用（change / pointerup 各兜一次）。 */
+    this.lists.settings.addEventListener('input', (e) => {
+      if (!e.target.classList || !e.target.classList.contains('bg-hue-range')) return;
+      this.previewBgHue(e.target, +e.target.value);
+    });
+    const commit = (e) => {
+      if (!e.target.classList || !e.target.classList.contains('bg-hue-range')) return;
+      this.commitBgHue(+e.target.value);
+    };
+    this.lists.settings.addEventListener('change', commit);
+    this.lists.settings.addEventListener('pointerup', commit);
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.open_){
@@ -173,6 +193,10 @@ export class Library {
     if (this.opts.volume != null) this.volume = this.opts.volume;
     if (this.opts.keepOn != null) this.keepOn = !!this.opts.keepOn;
     if (this.opts.hideBar != null) this.hideBar = !!this.opts.hideBar;
+    if (this.opts.immMotion != null) this.immMotion = this.opts.immMotion !== false;
+    if (this.opts.bg) this.bg = this.opts.bg;
+    if (this.opts.bgHue != null) this.bgHue = this.opts.bgHue;
+    this.appliedHue = this.bg === 'custom' ? this.bgHue : null;
 
     if (this.lrcBtn) this.lrcBtn.hidden = !this.opts.showLrcImport;
     this.count.textContent = this.tracks.length ? this.tracks.length + ' 首' : '';
@@ -463,6 +487,29 @@ export class Library {
         '<span class="sw-track"><i></i></span>' +
       '</button>';
 
+    /* 背景色卡：每个色卡自带 .pal-*，用该配色的三档画一个迷你绒布光 */
+    const bgPresets = [['crimson', '绯红'], ['amber', '琥珀'], ['pine', '松绿'],
+                       ['indigo', '藏蓝'], ['violet', '紫罗兰'], ['charcoal', '石墨']];
+    const bgNow = this.bg || 'crimson';
+    const bgGroup =
+      '<div class="set-group">' +
+        '<h3>背景</h3>' +
+        '<div class="bg-swatches">' +
+          bgPresets.map(([id, name]) =>
+            '<button class="bg-swatch pal-' + id + (bgNow === id ? ' on' : '') + '"' +
+              ' data-set="bg-' + id + '" title="' + name + '"' +
+              ' aria-label="背景：' + name + '" aria-pressed="' + (bgNow === id ? 'true' : 'false') + '"></button>'
+          ).join('') +
+        '</div>' +
+        '<div class="bg-hue">' +
+          '<span>自定义</span>' +
+          '<input class="bg-hue-range" type="range" min="0" max="360" step="1"' +
+            ' value="' + (this.bgHue == null ? 355 : this.bgHue) + '" aria-label="自定义背景色相">' +
+          '<i class="bg-hue-chip" style="background:' + bgChip(this.bgHue == null ? 355 : this.bgHue) + '"></i>' +
+        '</div>' +
+        '<p class="set-note">只换背景、唱片中心和暗部，文字/唱片本身不动；拖动色相条时看右边小圆点，松手才应用。</p>' +
+      '</div>';
+
     const screenGroup = platform === 'android'
       ? '<div class="set-group">' +
           '<h3>屏幕</h3>' +
@@ -531,6 +578,13 @@ export class Library {
         '</div>' +
       '</div>' +
 
+      '<div class="set-group">' +
+        '<h3>动效</h3>' +
+        sw('imm-motion', this.immMotion !== false, '沉浸切换时唱片放大', '切全屏时唱片从原尺寸长到全屏；关掉则是直接切换') +
+      '</div>' +
+
+      bgGroup +
+
       notifGroup +
 
       screenGroup +
@@ -552,6 +606,25 @@ export class Library {
     const b = e.target.closest('[data-set]');
     if (!b) return;
     this.hooks.onSetting(b.dataset.set);
+  }
+
+  /* 拖动色相条时的"只更新色点"：小圆点画的是这套色相在背景里的样子，
+     全屏背景等松手再换（见构造函数里的说明） */
+  previewBgHue(el, v){
+    this.bgHue = v;
+    const chip = el.parentNode && el.parentNode.querySelector('.bg-hue-chip');
+    if (chip) chip.style.background = bgChip(v);
+  }
+
+  /* 松手后真正应用：切到 custom、摘掉色卡高亮、通知上层换背景 */
+  commitBgHue(v){
+    if (this.bg === 'custom' && this.appliedHue === v) return;
+    this.bg = 'custom';
+    this.bgHue = v;
+    this.appliedHue = v;
+    const cards = this.lists.settings.querySelectorAll('.bg-swatch');
+    for (let i = 0; i < cards.length; i++) cards[i].classList.remove('on');
+    if (this.hooks.onBgHue) this.hooks.onBgHue(v);
   }
 
   /* 只更新播放态，避免整表重绘 */
