@@ -175,6 +175,15 @@ ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" -f null - 2>/dev/null
 
 这首是器乐曲，没有唱词，所以右侧显示的是随音乐滚动的**唱片内页文字**（本项目原创撰写，时间轴按乐曲段落排布）。换上你自己的有词曲目后，`LYRICS` 填歌词即可。
 
+## 请作者喝杯咖啡
+
+Vinyl Player 完全免费，没有广告，也没有内购，曲库和歌词都在本机处理。
+如果它帮你省下了一个音乐会员，或者只是让你听歌时心情好了一点，欢迎请作者喝杯咖啡。
+
+<p align="center">
+  <img src="docs/donate-qr.png" width="220" alt="微信赞赏码">
+</p>
+
 ## License
 
 代码以 [MIT](LICENSE) 授权。音频为 CC BY 4.0，版权归 Scott Buckley，不在 MIT 覆盖范围内，详见 [LICENSE](LICENSE) 末尾说明。
