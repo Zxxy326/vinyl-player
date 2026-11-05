@@ -43,7 +43,7 @@ jobs:
 
       - name: Build
         working-directory: ffmpeg-src
-        run: make -j"$(nproc)" ffmpeg
+        run: make -j"$(nproc)" ffmpeg.exe
 
       - name: Strip
         run: |
