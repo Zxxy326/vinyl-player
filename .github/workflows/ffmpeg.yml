@@ -32,7 +32,7 @@ jobs:
             --cross-prefix=x86_64-w64-mingw32- \
             --prefix=/tmp/ffmpeg-out \
             --disable-everything --disable-autodetect --disable-network \
-            --disable-doc --disable-debug --disable-video --disable-avdevice \
+            --disable-doc --disable-debug --disable-avdevice \
             --disable-postproc --disable-swscale --enable-small \
             --enable-protocol=file,pipe \
             --enable-demuxer=ape,asf,dsf,iff,wv,tta,tak,mpc,mpc8,matroska,mov,flac,ogg,wav,ac3,eac3,dts,dtshd,mp3,caf,aiff \
