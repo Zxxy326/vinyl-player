@@ -20,12 +20,11 @@ jobs:
           sudo apt-get install -y mingw-w64 nasm
 
       - name: Fetch FFmpeg 8.0
-        run: |
-          curl -L --retry 3 -o ffmpeg.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
-          tar xf ffmpeg.tar.xz
+        # ffmpeg.org 在 GitHub runner 上连不上，改从 GitHub 自己的镜像浅克隆
+        run: git clone --depth 1 --branch n8.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg-src
 
       - name: Configure (audio only)
-        working-directory: ffmpeg-8.0
+        working-directory: ffmpeg-src
         run: |
           ./configure \
             --target-os=mingw32 --arch=x86_64 \
@@ -44,16 +43,16 @@ jobs:
             --enable-swresample --enable-avfilter
 
       - name: Build
-        working-directory: ffmpeg-8.0
+        working-directory: ffmpeg-src
         run: make -j"$(nproc)" ffmpeg
 
       - name: Strip
         run: |
-          x86_64-w64-mingw32-strip -s ffmpeg-8.0/ffmpeg.exe || true
-          ls -lh ffmpeg-8.0/ffmpeg.exe
+          x86_64-w64-mingw32-strip -s ffmpeg-src/ffmpeg.exe || true
+          ls -lh ffmpeg-src/ffmpeg.exe
 
       - uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-win64
-          path: ffmpeg-8.0/ffmpeg.exe
+          path: ffmpeg-src/ffmpeg.exe
           if-no-files-found: error
