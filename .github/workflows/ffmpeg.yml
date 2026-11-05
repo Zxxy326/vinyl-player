@@ -1,0 +1,59 @@
+name: ffmpeg-sidecar
+
+# 构建桌面端随包的裁剪版 ffmpeg.exe（只保留音频 demux/decode + flac 编码）。
+# 产物下载后放到 src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  win-ffmpeg:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mingw-w64 + nasm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 nasm
+
+      - name: Fetch FFmpeg 8.0
+        run: |
+          curl -L --retry 3 -o ffmpeg.tar.xz https://ffmpeg.org/releases/ffmpeg-8.0.tar.xz
+          tar xf ffmpeg.tar.xz
+
+      - name: Configure (audio only)
+        working-directory: ffmpeg-8.0
+        run: |
+          ./configure \
+            --target-os=mingw32 --arch=x86_64 \
+            --cross-prefix=x86_64-w64-mingw32- \
+            --prefix=/tmp/ffmpeg-out \
+            --disable-everything --disable-autodetect --disable-network \
+            --disable-doc --disable-debug --disable-video --disable-avdevice \
+            --disable-postproc --disable-swscale --enable-small \
+            --enable-protocol=file,pipe \
+            --enable-demuxer=ape,asf,dsf,iff,wv,tta,tak,mpc,mpc8,matroska,mov,flac,ogg,wav,ac3,eac3,dts,dtshd,mp3,caf,aiff \
+            --enable-decoder=ape,wmav1,wmav2,wmapro,wmalossless,dsd_lsbf,dsd_msbf,dsd_lsbf_planar,dsd_msbf_planar,wavpack,tta,tak,mpc7,mpc8,alac,flac,mp3,opus,vorbis,aac,ac3,eac3,dca,truehd,mlp,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_u8,pcm_mulaw,pcm_alaw \
+            --enable-encoder=flac,pcm_s16le,pcm_s24le \
+            --enable-muxer=flac,wav \
+            --enable-filter=aresample,aformat,anull,volume \
+            --enable-parser=flac,mpegaudio,aac,ac3,dca \
+            --enable-swresample --enable-avfilter
+
+      - name: Build
+        working-directory: ffmpeg-8.0
+        run: make -j"$(nproc)" ffmpeg
+
+      - name: Strip
+        run: |
+          x86_64-w64-mingw32-strip -s ffmpeg-8.0/ffmpeg.exe || true
+          ls -lh ffmpeg-8.0/ffmpeg.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-win64
+          path: ffmpeg-8.0/ffmpeg.exe
+          if-no-files-found: error
